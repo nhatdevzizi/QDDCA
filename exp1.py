@@ -14,6 +14,9 @@ randomstate = random.getstate()
 f = open("output/exp2-7.1.csv","w", buffering=1)
 
 
+
+
+
 def coefficient_of_variation(data, ddof=0):
     """
     计算变异系数
