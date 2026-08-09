@@ -26,6 +26,36 @@ run *exp1.py*, *exp2.py* or *exp3.py* for simulation, and modify the parameters 
 
   Simulate the memory occupancy of req1 and req2 at node u3 over time, under the given network topology.
 
+## Real-time congestion estimation
+
+When rerouting is enabled, Q-DDCA now scores each neighboring node with a
+memory-aware acceptance estimate instead of relying only on past query results:
+
+```text
+q_hat = alpha * q_history + (1 - alpha) * (1 - memory_utilization)
+```
+
+`memory_utilization` is read when the route is selected, so a neighbor whose
+memory suddenly fills is penalized immediately. Configure `alpha` with the
+`Network(..., congestion_history_weight=0.5)` argument. A value of `1.0`
+reproduces historical-only scoring; `0.0` uses only current memory availability.
+
+### Export throughput and EDR measurements
+
+Run a paired baseline-versus-improved sweep and create graph-ready results:
+
+```bash
+python measure_congestion.py
+```
+
+The default output is `output/real_time_congestion_measurements.csv`. Each
+window size has two rows: historical-only Q-DDCA (`alpha=1.0`) and real-time
+memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
+request pairs. `mean_request_throughput_pairs_s` is the average successful
+distribution rate per request; `total_edr_pairs_s` is their sum, matching the
+paper's definition of total network EDR. Standard deviations and percentage
+changes versus the historical baseline are included for plotting and analysis.
+
 ## Note and Citation
 
 - Please cite:"Chen L, Xue K, Li J, et al. Q-DDCA: Decentralized dynamic congestion avoid routing in large-scale quantum networks[J]. IEEE/ACM Transactions on Networking, 2023, 32(1): 368-381."[link](https://ieeexplore.ieee.org/abstract/document/10158747)

@@ -10,7 +10,11 @@ class Network(Entity):
     """Manage the quantum network topology, routing table, and communication requests."""
 
     def __init__(self, n=10, p=0.5, reqs=3, memorySize=30, windowSize=100, queryTime=0.02, send_max_try=10,
-                 allow_reroute=False, rate=3, delay=0.2, buffer=1, random_memory=False):
+                 allow_reroute=False, rate=3, delay=0.2, buffer=1, random_memory=False,
+                 congestion_history_weight=0.5):
+        if not 0.0 <= congestion_history_weight <= 1.0:
+            raise ValueError("congestion_history_weight must be between 0 and 1")
+
         # Basic network attributes
         self.nodes = []  # Node list
         self.links = {}  # Link relationships represented as an adjacency list
@@ -32,6 +36,7 @@ class Network(Entity):
         self.queryTime = queryTime
         self.send_max_try = send_max_try
         self.allow_reroute = allow_reroute
+        self.congestion_history_weight = congestion_history_weight
 
         # Link configuration parameters
         self.rate = rate
@@ -62,7 +67,8 @@ class Network(Entity):
         for i in range(self.n):
             n: QNNode = QNNode("n" + str(i + 1), memorySize=self.memorySize, windowSize=self.windowSize,
                                queryTime=self.queryTime, send_max_try=self.send_max_try,
-                               allow_reroute=self.allow_reroute, random_memory=self.random_memory)
+                               allow_reroute=self.allow_reroute, random_memory=self.random_memory,
+                               congestion_history_weight=self.congestion_history_weight)
             n.set_net(self)  # Set the network that owns the node
             self.nodes.append(n)
             self.links[n] = []  # Initialize the node's adjacency list
