@@ -19,21 +19,21 @@ f = open("output/exp2-7.1.csv","w", buffering=1)
 
 def coefficient_of_variation(data, ddof=0):
     """
-    计算变异系数
+    Calculate the coefficient of variation.
 
-    参数:
-    data: 数据列表或数组
-    ddof: 自由度调整 (0=总体, 1=样本)
+    Parameters:
+    data: Data list or array
+    ddof: Degrees-of-freedom adjustment (0=population, 1=sample)
 
-    返回:
-    cv: 变异系数（百分比）
+    Returns:
+    cv: Coefficient of variation (percentage)
     """
     mean_val = np.mean(data)
     std_val = np.std(data, ddof=ddof)
 
-    # 避免除零错误
+    # Avoid division by zero
     if mean_val == 0:
-        return float('inf')  # 返回无穷大
+        return float('inf')  # Return infinity
 
     cv = std_val / mean_val
     return cv

@@ -9,101 +9,101 @@ from qubit import Qubit
 import qns.utils.log as log
 import random
 
-# 处理步骤时间间隔
+# Processing step interval
 handle_step_time = 0.01000
 
 
 class QNodeHandleEvent(Event):
-    """处理节点事件：用于触发节点处理逻辑的通用事件"""
+    """Generic event that triggers a node's processing logic."""
 
     def __init__(self, refresh: bool, t: Optional[Time] = None, name: Optional[str] = None, by: Optional[Any] = None):
         super().__init__(t=t, name=name, by=by)
-        self.refresh = refresh  # 是否刷新发送窗口
+        self.refresh = refresh  # Whether to refresh the sending window
 
     def invoke(self) -> None:
-        """事件触发时调用节点的handle方法"""
+        """Call the node's handle method when the event fires."""
         if self.by and hasattr(self.by, 'handle'):
             self.by.handle(self.by.simulator, None, self.by, self)
 
 
 class QNodeQueryBeforeEvent(Event):
-    """查询前事件：在发送量子比特前进行路由查询和资源检查"""
+    """Event that queries routing and resources before sending a qubit."""
 
     def __init__(self, qubit: Qubit, t: Optional[Time] = None, name: Optional[str] = None, by: Optional[Any] = None):
         super().__init__(t=t, name=name, by=by)
-        self.qubit = qubit  # 待发送的量子比特
+        self.qubit = qubit  # Qubit to send
 
     def invoke(self) -> None:
-        """触发节点的before_send_attempt处理逻辑"""
+        """Trigger the node's before_send_attempt logic."""
         if self.by and hasattr(self.by, 'handle'):
             self.by.handle(self.by.simulator, self.qubit, None, self)
 
 
 class QNodeQueryAfterEvent(Event):
-    """查询后事件：在量子比特成功发送到下一跳后处理"""
+    """Event processed after a qubit is sent successfully to the next hop."""
 
     def __init__(self, qubit: Qubit, currhop, nexthop, t: Optional[Time] = None, name: Optional[str] = None,
                  by: Optional[Any] = None):
         super().__init__(t=t, name=name, by=by)
-        self.qubit = qubit  # 传输中的量子比特
-        self.currhop = currhop  # 当前节点
-        self.nexthop = nexthop  # 下一跳节点
+        self.qubit = qubit  # Qubit in transit
+        self.currhop = currhop  # Current node
+        self.nexthop = nexthop  # Next-hop node
 
     def invoke(self) -> None:
-        """触发节点的after_send_attempt处理逻辑"""
+        """Trigger the node's after_send_attempt logic."""
         if self.by and hasattr(self.by, 'handle'):
             self.by.handle(self.by.simulator, self.qubit, None, self)
 
 
 class QNNode(QNode):
-    """量子网络节点：扩展的基础量子节点，支持量子比特的路由和传输管理"""
+    """Quantum network node supporting qubit routing and transmission management."""
 
     def __init__(self, name: str, isSender=False, dest=None, memorySize=10, windowSize=10, queryTime=0.02,
                  start_time: float = 0, end_time: float = None, send_max_try=100, allow_reroute=False,
                  random_memory=False):
         self.name = name
 
-        # 发送器配置
-        self.isSender = isSender  # 是否为发送节点
-        self.dest = dest  # 目标节点
-        self.send_max_try = send_max_try  # 最大尝试次数
-        self.queryTime = queryTime  # 查询时间间隔
-        self.start_time = start_time  # 开始时间
-        self.end_time = end_time  # 结束时间
+        # Sender configuration
+        self.isSender = isSender  # Whether this is a sender node
+        self.dest = dest  # Destination node
+        self.send_max_try = send_max_try  # Maximum number of attempts
+        self.queryTime = queryTime  # Query interval
+        self.start_time = start_time  # Start time
+        self.end_time = end_time  # End time
 
-        # 内存管理
-        self.memorySize = memorySize  # 内存容量
-        self.currentSize = 0  # 当前使用量
-        self.memory = []  # 存储的量子比特列表
-        self.random_memory = random_memory  # 是否使用随机内存大小
+        # Memory management
+        self.memorySize = memorySize  # Memory capacity
+        self.currentSize = 0  # Current usage
+        self.memory = []  # Stored qubits
+        self.random_memory = random_memory  # Whether to use a random memory size
 
-        # 窗口管理
-        self.windowSize = windowSize  # 发送窗口大小
-        self.minhop = 0  # 最小跳数
-        self.currentWindowsSize = 0  # 当前窗口大小
-        self.sendingList = []  # 发送中的量子比特列表
-        self.sendedList = []  # 已发送的量子比特列表
-        self.dropList = []  # 丢弃的量子比特列表
-        self.allow_reroute = allow_reroute  # 是否允许重路由
+        # Window management
+        self.windowSize = windowSize  # Sending window size
+        self.minhop = 0  # Minimum hop count
+        self.currentWindowsSize = 0  # Current window size
+        self.sendingList = []  # Qubits being sent
+        self.sendedList = []  # Sent qubits
+        self.dropList = []  # Dropped qubits
+        self.allow_reroute = allow_reroute  # Whether rerouting is allowed
 
-        # 查询统计
-        self.query_ans = []  # 查询结果历史
-        self.query_ans_max_len = 10  # 历史记录最大长度
-        self.query_delta = 0.001  # 查询时间随机延迟
+        # Query statistics
+        self.query_ans = []  # Query result history
+        self.query_ans_max_len = 10  # Maximum history length
+        self.query_delta = 0.001  # Random query delay
 
-        # 网络状态
-        self.query_list = {}  # 各节点的查询记录
-        self.net = None  # 所属网络
+        # Network state
+        self.query_list = {}  # Query records for each node
+        self.net = None  # Owning network
 
         if self.random_memory:
             self.memorySize = random.randint(1, self.memorySize)
 
     def set_net(self, net):
-        """设置节点所属的网络拓扑"""
+        """Set the network topology that owns this node."""
         self.net = net
 
     def install(self, simulator: Simulator):
-        """安装节点到模拟器：初始化时间参数并启动第一个处理事件"""
+        """Install the node in the simulator and schedule its first processing event."""
         self.simulator = simulator
         self.query_time = simulator.time(sec=self.queryTime)
         self.start_time_obj = simulator.time(sec=self.start_time)
@@ -114,16 +114,16 @@ class QNNode(QNode):
 
         self.step_time = simulator.time(sec=handle_step_time)
 
-        # 初始化所有节点的查询记录
+        # Initialize query records for all nodes
         for n in self.net.nodes:
             self.query_list[n] = []
 
-        # 添加启动事件
+        # Add the startup event
         event = QNodeHandleEvent(refresh=True, t=self.start_time_obj, name=f"StartEvent_{self.name}", by=self)
         simulator.add_event(event)
 
     def handle(self, simulator: Simulator, msg: object, source=None, event: Event = None):
-        """事件处理分发器：根据事件类型调用相应的处理逻辑"""
+        """Dispatch an event to the appropriate processing logic based on its type."""
         if not self.isSender:
             return
         if isinstance(event, QNodeHandleEvent):
@@ -141,18 +141,18 @@ class QNNode(QNode):
             self.before_send_attempt(qubit)
 
     def send(self, refresh=False):
-        """发送量子比特：根据窗口大小创建并发送新的量子比特"""
+        """Create and send a new qubit according to the window size."""
         if self.minhop == 0:
             self.minhop = self.net.route_table[self][self.dest][0]
 
-        # 如果发送列表未满，创建新的量子比特
+        # Create a new qubit if the sending list is not full
         if len(self.sendingList) < self.windowSize * self.minhop:
             q = Qubit(src=self, dest=self.dest,
                       max_try_count=self.send_max_try, birthday=self.simulator.current_time)
             self.sendingList.append(q)
             log.debug(f"qubit {q} start to transmit from {self} to {self.dest}")
 
-            # 添加随机延迟后触发查询前事件
+            # Trigger a pre-query event after a random delay
             rt_delay = random.random() * self.query_delta
             rt = self.simulator.time(sec=rt_delay)
             event = QNodeQueryBeforeEvent(
@@ -163,7 +163,7 @@ class QNNode(QNode):
             )
             self.simulator.add_event(event)
 
-        # 如果还有空间，安排下一次发送
+        # Schedule another send if space remains
         if len(self.sendingList) < self.windowSize * self.minhop:
             event = QNodeHandleEvent(
                 refresh=True,
@@ -174,30 +174,30 @@ class QNNode(QNode):
             self.simulator.add_event(event)
 
     def before_send_attempt(self, qubit):
-        """发送前尝试：检查路由和资源可用性，决定是否发送"""
-        retq = qubit.attempt()  # 量子比特自身状态检查
+        """Check routing and resource availability before deciding whether to send."""
+        retq = qubit.attempt()  # Check the qubit's state
 
-        # 获取路由信息
+        # Get routing information
         currhop, nexthop, nextlink = self.route(qubit)
 
-        # 检查下一跳节点和链路的可用性
+        # Check next-hop node and link availability
         if nexthop is None or nextlink is None:
             retn = False
             retl = False
             retq = False
         else:
-            retn = nexthop.query(self.simulator)  # 检查节点内存
-            retl, _ = nextlink.query(self.simulator)  # 检查链路带宽
+            retn = nexthop.query(self.simulator)  # Check node memory
+            retl, _ = nextlink.query(self.simulator)  # Check link bandwidth
 
-        # 如果所有条件满足，发送量子比特
+        # Send the qubit if all conditions are satisfied
         if retq and retn and retl:
-            self.update2(nexthop, True)  # 更新节点查询统计
-            nexthop.use(qubit)  # 占用下一跳节点内存
-            retll, st = nextlink.use(self.simulator)  # 占用链路资源
+            self.update2(nexthop, True)  # Update node query statistics
+            nexthop.use(qubit)  # Reserve memory on the next-hop node
+            retll, st = nextlink.use(self.simulator)  # Reserve link resources
             assert (retll == True)
             log.debug(f"qubit {qubit.name} send from {currhop} to {nexthop} at {st + self.query_time}")
 
-            # 安排查询后事件
+            # Schedule a post-query event
             event = QNodeQueryAfterEvent(
                 qubit=qubit,
                 currhop=currhop,
@@ -208,19 +208,19 @@ class QNNode(QNode):
             )
             self.simulator.add_event(event)
         else:
-            # 发送失败处理
+            # Handle a failed send
             if nexthop is not None:
-                self.update2(nexthop, False)  # 更新失败统计
+                self.update2(nexthop, False)  # Update failure statistics
 
             if retq == False:
-                # 量子比特超过最大尝试次数，丢弃
+                # Drop the qubit after it exceeds the maximum attempt count
                 self.sendingList.remove(qubit)
                 self.dropList.append(qubit)
                 if self != currhop:
                     currhop.release(qubit)
                 log.debug(f"qubit {qubit.name} drop on {currhop} nexthop {nexthop} {retn} nextlink {nextlink} {retl}")
 
-                # 触发处理事件
+                # Trigger a processing event
                 event = QNodeHandleEvent(
                     refresh=False,
                     t=self.simulator.current_time + self.query_time,
@@ -229,7 +229,7 @@ class QNNode(QNode):
                 )
                 self.simulator.add_event(event)
             else:
-                # 资源不足，稍后重试
+                # Resources are insufficient; retry later
                 log.debug(f"qubit {qubit.name} retry on {currhop} nexthop {nexthop} {retn} nextlink {nextlink} {retl}")
                 rt_delay = random.random() * self.query_delta
                 rt = self.simulator.time(sec=rt_delay)
@@ -242,17 +242,17 @@ class QNNode(QNode):
                 self.simulator.add_event(event)
 
     def route(self, qubit):
-        """路由选择：根据路由策略选择下一跳节点和链路"""
+        """Select the next-hop node and link according to the routing strategy."""
         currhop = qubit.curr
         rt = self.net.query_route(currhop, self.dest)
 
-        # 如果不允许重路由，使用最短路径
+        # Use the shortest path if rerouting is disabled
         if not self.allow_reroute:
             nexthop: QNode = rt[0][0]
             nextlink: Link = rt[0][1]
             return currhop, nexthop, nextlink
 
-        # 重路由逻辑：基于概率和路径质量选择最优路径
+        # Rerouting logic: select the best path by probability and path quality
         m = qubit.try_count
         M = qubit.max_try_count
         if m > M:
@@ -266,7 +266,7 @@ class QNNode(QNode):
         min_mt = INF
         min_y = INF
 
-        # 评估所有可能的邻居节点
+        # Evaluate all possible neighboring nodes
         for neigh in rt:
             np = neigh[0]
             nl = neigh[1]
@@ -275,7 +275,7 @@ class QNNode(QNode):
             Lmax = max(self.net.route_table[self.dest][self][0], 5)
             pce = 1 - self.net.route_table[self.dest][self][0] / Lmax
 
-            # 概率性路径探索
+            # Probabilistic path exploration
             if random.random() < pce:
                 lmt = min_mt + 1
             else:
@@ -286,7 +286,7 @@ class QNNode(QNode):
             if len(qubit.route) + mt > Lmax:
                 continue
 
-            # 计算路径评估指标
+            # Calculate the path evaluation metric
             p = self.stat2(np)
             y = (1 - (1 - p) ** (M - m)) * mt + (1 - p) ** (M - m) * metric_drop
             if y < min_y:
@@ -305,16 +305,16 @@ class QNNode(QNode):
         return currhop, nexthop, nextlink
 
     def after_send_attempt(self, qubit: Qubit, currhop, nexthop):
-        """发送后处理：量子比特成功到达下一跳后的处理逻辑"""
+        """Process a qubit after it successfully reaches the next hop."""
         log.debug(f"qubit {qubit.name} ({qubit.src}->{qubit.dest}) recved from {currhop} to {nexthop}")
 
-        # 释放当前节点的资源
+        # Release resources on the current node
         if self != currhop:
             currhop.release(qubit)
 
-        qubit.send(nexthop)  # 更新量子比特位置
+        qubit.send(nexthop)  # Update the qubit's location
 
-        # 如果到达目的地，完成传输
+        # Complete transmission if the destination has been reached
         if self.dest == nexthop:
             self.sendingList.remove(qubit)
             self.sendedList.append(qubit)
@@ -329,7 +329,7 @@ class QNNode(QNode):
             )
             self.simulator.add_event(event)
         else:
-            # 继续传输到下一跳
+            # Continue transmission to the next hop
             rt_delay = random.random() * self.query_delta
             rt = self.simulator.time(sec=rt_delay)
             event = QNodeQueryBeforeEvent(
@@ -341,22 +341,22 @@ class QNNode(QNode):
             self.simulator.add_event(event)
 
     def query(self, simulator: Simulator) -> Tuple[bool, int]:
-        """查询节点内存状态：检查是否有可用内存空间"""
+        """Check whether the node has available memory."""
         ret = self.currentSize < self.memorySize
         return ret
 
     def use(self, qubit):
-        """占用节点内存：存储量子比特到内存中"""
+        """Reserve node memory by storing the qubit."""
         self.currentSize += 1
         self.memory.append(qubit)
 
     def release(self, qubit):
-        """释放节点内存：从内存中移除量子比特"""
+        """Release node memory by removing the qubit."""
         self.currentSize -= 1
         self.memory.remove(qubit)
 
     def stat(self):
-        """统计历史查询成功率"""
+        """Calculate the historical query success rate."""
         delta = 0.5
         nt = 0
         na = len(self.query_ans)
@@ -366,13 +366,13 @@ class QNNode(QNode):
         return (nt + delta) / (na + delta)
 
     def update(self, ret):
-        """更新查询结果历史"""
+        """Update the query result history."""
         self.query_ans.append(ret)
         if len(self.query_ans) > self.query_ans_max_len:
             del self.query_ans[0]
 
     def stat2(self, node):
-        """统计特定节点的查询成功率"""
+        """Calculate the query success rate for a specific node."""
         delta = 0.5
         nt = 0
         na = len(self.query_list[node])
@@ -382,38 +382,38 @@ class QNNode(QNode):
         return (nt + delta) / (na + delta)
 
     def update2(self, node, result):
-        """更新特定节点的查询记录"""
+        """Update query records for a specific node."""
         self.query_list[node].append(result)
         if len(self.query_list[node]) > self.query_ans_max_len:
             del self.query_list[node][0]
 
     def __repr__(self):
-        """返回节点名称的字符串表示"""
+        """Return the node name as its string representation."""
         return self.name
 
 
 class Link(QuantumChannel):
-    """量子链路：管理两个量子节点之间的连接和带宽资源"""
+    """Manage connectivity and bandwidth resources between two quantum nodes."""
 
     def __init__(self, name: str, nodes: List[QNode], metric=1, rate=1, delay=0.2, buffer=None):
-        self.name = name  # 链路名称
-        self.nodes = nodes  # 连接的节点
-        self.rate = rate  # 传输速率
-        self.delay = delay  # 传输延迟
-        self.buffer = buffer  # 缓冲区大小
-        self.metric = metric  # 链路度量值
+        self.name = name  # Link name
+        self.nodes = nodes  # Connected nodes
+        self.rate = rate  # Transmission rate
+        self.delay = delay  # Transmission delay
+        self.buffer = buffer  # Buffer size
+        self.metric = metric  # Link metric
 
-        self.current_send_time = None  # 当前发送时间
+        self.current_send_time = None  # Current send time
 
     def install(self, simulator: Simulator):
-        """安装链路到模拟器：初始化时间参数"""
+        """Install the link in the simulator and initialize timing parameters."""
         self.current_send_time = simulator.time(sec=simulator.ts.sec)
         send_interval_sec = 1.0 / self.rate
-        self.step_send_time = simulator.time(sec=send_interval_sec)  # 发送间隔
-        self.delay_time = simulator.time(sec=self.delay)  # 传输延迟
+        self.step_send_time = simulator.time(sec=send_interval_sec)  # Send interval
+        self.delay_time = simulator.time(sec=self.delay)  # Transmission delay
 
     def query(self, simulator: Simulator) -> Tuple[bool, Optional[int]]:
-        """查询链路可用性：检查链路是否可立即使用"""
+        """Check whether the link can be used immediately."""
         if self.current_send_time < simulator.current_time:
             send_time_slice = self.current_send_time + self.delay_time
             return True, send_time_slice
@@ -422,7 +422,7 @@ class Link(QuantumChannel):
             send_time_slice = self.current_send_time + self.delay_time
             return True, send_time_slice
 
-        # 检查缓冲区限制
+        # Check the buffer limit
         buffer_time_slots = self.step_send_time.time_slot * self.buffer
         buffer_time = simulator.time(time_slot=buffer_time_slots)
 
@@ -433,7 +433,7 @@ class Link(QuantumChannel):
             return True, send_time_slice
 
     def use(self, simulator: Simulator):
-        """占用链路资源：分配传输时间并返回发送时间片"""
+        """Reserve link resources and return the allocated send timeslot."""
         if self.current_send_time < simulator.current_time:
             send_time_slice = simulator.current_time + self.delay_time
             self.current_send_time = simulator.current_time + self.step_send_time
@@ -444,7 +444,7 @@ class Link(QuantumChannel):
             self.current_send_time += self.step_send_time
             return True, send_time_slice
 
-        # 检查缓冲区限制
+        # Check the buffer limit
         buffer_time_slots = self.step_send_time.time_slot * self.buffer
         buffer_time = simulator.time(time_slot=buffer_time_slots)
 
@@ -456,5 +456,5 @@ class Link(QuantumChannel):
             return True, send_time_slice
 
     def __repr__(self):
-        """返回链路名称的字符串表示"""
+        """Return the link name as its string representation."""
         return self.name

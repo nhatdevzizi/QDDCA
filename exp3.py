@@ -128,7 +128,7 @@ class FixTopoNetwork(Network):
 
 class SelfTimer(Timer):
     def __init__(self, network, start_time=0, end_time=30, step_time=0.01, alloc_time=1, name="t1"):
-        # 正确调用父类构造函数
+        # Call the parent constructor correctly
         super().__init__(name, start_time, end_time, step_time, trigger_func=None)
         self.network: FixTopoNetwork = network
         self.alloc_time = alloc_time
@@ -137,7 +137,7 @@ class SelfTimer(Timer):
         self.l2 = []
 
     def trigger(self):
-        """定时器触发时自动调用"""
+        """Called automatically when the timer fires."""
         n3m = self.network.get_node("n3").memory
         n1 = self.network.get_node("n1")
         n2 = self.network.get_node("n2")
@@ -147,10 +147,10 @@ class SelfTimer(Timer):
         self.l1.append(len(n1s))
         self.l2.append(len(n2s))
         self.last_write += 1
-        # print(f"n1的量子比特: {n1s}, n2的量子比特: {n2s}")
+        # print(f"n1 qubits: {n1s}, n2 qubits: {n2s}")
 
         if self.last_write % 10 == 0:
-            # 使用安装时设置的 _simulator
+            # Use the _simulator set during installation
             f.write(f"{self._simulator.current_time},{np.mean(self.l1)},{np.mean(self.l2)}\n")
             self.l1 = []
             self.l2 = []
