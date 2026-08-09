@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from measure_congestion import CSV_FIELDS, aggregate_measurements, parse_int_list, write_csv
+from exp4 import CSV_FIELDS, aggregate_measurements, build_parser, parse_int_list, write_csv
 
 
 class MeasurementExportTests(unittest.TestCase):
@@ -46,6 +46,9 @@ class MeasurementExportTests(unittest.TestCase):
 
     def test_parse_int_list(self):
         self.assertEqual(parse_int_list("5, 10,15"), (5, 10, 15))
+
+    def test_default_output_matches_project_experiment_template(self):
+        self.assertEqual(build_parser().parse_args([]).output, "output/exp4.csv")
 
     def test_aggregate_calculates_improvement_against_baseline(self):
         baseline, improved = aggregate_measurements(self.measurements, self.args)

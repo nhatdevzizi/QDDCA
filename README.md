@@ -7,12 +7,13 @@ This is the minized prototype codes for implementing the Q-DDCA protocol. This c
 1. ``python3 exp1.py``
 2. ``python3 exp2.py``
 3. ``python3 exp3.py``
+4. ``python3 exp4.py``
 
 NOTE: They will create files to log the results.
 
 ## Details
 
-run *exp1.py*, *exp2.py* or *exp3.py* for simulation, and modify the parameters to collect the complete set of results
+run *exp1.py*, *exp2.py*, *exp3.py* or *exp4.py* for simulation, and modify the parameters to collect the complete set of results
 
 - *exp1.py*
 
@@ -25,6 +26,11 @@ run *exp1.py*, *exp2.py* or *exp3.py* for simulation, and modify the parameters 
 - *exp3.py*
 
   Simulate the memory occupancy of req1 and req2 at node u3 over time, under the given network topology.
+
+- *exp4.py*
+
+  Compare historical-only and real-time memory-aware Q-DDCA on paired random
+  topologies, then export per-request throughput and total EDR for graphing.
 
 ## Real-time congestion estimation
 
@@ -45,10 +51,10 @@ reproduces historical-only scoring; `0.0` uses only current memory availability.
 Run a paired baseline-versus-improved sweep and create graph-ready results:
 
 ```bash
-python measure_congestion.py
+python exp4.py
 ```
 
-The default output is `output/real_time_congestion_measurements.csv`. Each
+The default output is `output/exp4.csv`. Each
 window size has two rows: historical-only Q-DDCA (`alpha=1.0`) and real-time
 memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
 request pairs. `mean_request_throughput_pairs_s` is the average successful
@@ -56,6 +62,9 @@ distribution rate per request; `total_edr_pairs_s` is their sum, matching the
 paper's definition of total network EDR. Standard deviations and percentage
 changes versus the historical baseline are included for plotting and analysis,
 along with all simulation parameters needed to reproduce the sweep.
+
+See `REPORT.md` for the comparison with the paper's published results and a
+discussion of the measured effect.
 
 ## Note and Citation
 

@@ -193,7 +193,7 @@ def write_csv(rows, output_path):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default="output/real_time_congestion_measurements.csv")
+    parser.add_argument("--output", default="output/exp4.csv")
     parser.add_argument("--windows", type=parse_int_list, default=(5, 10, 15, 20, 25, 30))
     parser.add_argument("--seeds", type=parse_int_list, default=(101, 202, 303))
     parser.add_argument("--duration", type=float, default=10.0)
