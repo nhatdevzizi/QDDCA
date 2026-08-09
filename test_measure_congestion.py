@@ -14,6 +14,15 @@ class MeasurementExportTests(unittest.TestCase):
             seeds=(1, 2),
             send_max_try=5,
             requests=2,
+            duration=10.0,
+            accuracy=1000,
+            nodes=20,
+            edge_probability=0.1,
+            memory_size=10,
+            query_time=0.05,
+            link_rate=1000.0,
+            link_delay=0.001,
+            link_buffer=1,
         )
         self.measurements = [
             self.sample("historical_only", 1, 10.0, 20.0, 200, 10, 2),

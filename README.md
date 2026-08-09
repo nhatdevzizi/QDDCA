@@ -54,7 +54,8 @@ memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
 request pairs. `mean_request_throughput_pairs_s` is the average successful
 distribution rate per request; `total_edr_pairs_s` is their sum, matching the
 paper's definition of total network EDR. Standard deviations and percentage
-changes versus the historical baseline are included for plotting and analysis.
+changes versus the historical baseline are included for plotting and analysis,
+along with all simulation parameters needed to reproduce the sweep.
 
 ## Note and Citation
 
