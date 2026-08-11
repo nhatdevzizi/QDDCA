@@ -1,8 +1,8 @@
 .codegraph/
-venv/
+.venv/
 .idea/
 __pycache__/
 *.py[cod]
 tmp/
-.output/
+output/
 REPORT.md
