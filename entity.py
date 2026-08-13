@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from functools import singledispatch
 from typing import List, Optional, Tuple, Any
 from qns.simulator.simulator import Simulator
@@ -11,6 +12,15 @@ import random
 
 # Processing step interval
 handle_step_time = 0.01000
+
+
+@dataclass(frozen=True)
+class CongestionState:
+    """Snapshot of the local signals used to score a neighboring node."""
+
+    historical_acceptance: float
+    memory_utilization: float
+    estimated_acceptance: float
 
 
 class QNodeHandleEvent(Event):
@@ -60,8 +70,12 @@ class QNNode(QNode):
 
     def __init__(self, name: str, isSender=False, dest=None, memorySize=10, windowSize=10, queryTime=0.02,
                  start_time: float = 0, end_time: float = None, send_max_try=100, allow_reroute=False,
-                 random_memory=False):
+                 random_memory=False, congestion_history_weight=0.5):
         self.name = name
+
+        if not 0.0 <= congestion_history_weight <= 1.0:
+            raise ValueError("congestion_history_weight must be between 0 and 1")
+        self.congestion_history_weight = congestion_history_weight
 
         # Sender configuration
         self.isSender = isSender  # Whether this is a sender node
@@ -286,7 +300,8 @@ class QNNode(QNode):
             if len(qubit.route) + mt > Lmax:
                 continue
 
-            # Calculate the path evaluation metric
+            # Calculate the path evaluation metric from historical acceptance
+            # and the neighbor's current memory pressure.
             p = self.stat2(np)
             y = (1 - (1 - p) ** (M - m)) * mt + (1 - p) ** (M - m) * metric_drop
             if y < min_y:
@@ -295,7 +310,6 @@ class QNNode(QNode):
                 min_mt = mt
                 min_y = y
 
-        delta = 1
         if min_y > metric_drop:
             return currhop, None, None
 
@@ -372,14 +386,45 @@ class QNNode(QNode):
             del self.query_ans[0]
 
     def stat2(self, node):
-        """Calculate the query success rate for a specific node."""
+        """Estimate a neighbor's current acceptance probability.
+
+        This implements the real-time congestion estimator proposed for
+        Q-DDCA: alpha * q_history + (1 - alpha) * (1 - memory_utilization).
+        """
+        return self.congestion_state(node).estimated_acceptance
+
+    def historical_stat2(self, node):
+        """Calculate the smoothed historical query success rate for a node."""
         delta = 0.5
         nt = 0
-        na = len(self.query_list[node])
-        for ans in self.query_list[node]:
+        history = self.query_list.get(node, [])
+        na = len(history)
+        for ans in history:
             if ans:
                 nt += 1
         return (nt + delta) / (na + delta)
+
+    @staticmethod
+    def memory_utilization(node):
+        """Return a neighbor's live memory utilization, clamped to [0, 1]."""
+        if node.memorySize <= 0:
+            return 1.0
+        return max(0.0, min(1.0, node.currentSize / node.memorySize))
+
+    def congestion_state(self, node):
+        """Build the real-time congestion snapshot used by routing."""
+        historical_acceptance = self.historical_stat2(node)
+        memory_utilization = self.memory_utilization(node)
+        alpha = self.congestion_history_weight
+        estimated_acceptance = (
+            alpha * historical_acceptance
+            + (1.0 - alpha) * (1.0 - memory_utilization)
+        )
+        return CongestionState(
+            historical_acceptance=historical_acceptance,
+            memory_utilization=memory_utilization,
+            estimated_acceptance=estimated_acceptance,
+        )
 
     def update2(self, node, result):
         """Update query records for a specific node."""
