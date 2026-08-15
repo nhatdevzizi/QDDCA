@@ -4,6 +4,7 @@ from qns.simulator.simulator import Simulator
 import qns.utils.log as log
 import sys
 from collections import Counter
+from pathlib import Path
 # import numpy as np
 
 random.seed(2)
@@ -11,7 +12,9 @@ random.seed(2)
 # random.seed(2)
 randomstate = random.getstate()
 
-f = open("output/exp1-4.csv","w", buffering=1)
+OUTPUT = Path("output/exp2/exp1-4.csv")
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+f = open(OUTPUT, "w", buffering=1)
 
 for w in [10, 20, 30]:
     for reroute in [False, True]:

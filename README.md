@@ -32,6 +32,24 @@ run *exp1.py*, *exp2.py*, *exp3.py* or *exp4.py* for simulation, and modify the 
   Compare historical-only and real-time memory-aware Q-DDCA on paired random
   topologies, then export per-request throughput and total EDR for graphing.
 
+- *exp5.py*
+
+  Sweep the blending weight `alpha` from 0.0 to 1.0 on paired seeded scenarios
+  (`--alpha-step`, default 0.02) and export the difference per alpha step, plus
+  a per-seed raw CSV. See [`DOCS/alpha_sweep_report.md`](DOCS/alpha_sweep_report.md).
+  Plot it with `python plot_exp5.py` — three IEEE single-column figures, plus
+  PNG previews and LaTeX captions.
+
+- *exp6.py*
+
+  Sweep the smoothing constant `epsilon` of `q_history = (A + eps) / (T + eps)`
+  from 0.0 to 1.0 (`--epsilon-step`, default 0.05), with the history weight held
+  at `alpha = 1` so epsilon acts undiluted. Plot it with `python plot_exp6.py`,
+  which reuses every figure routine in `plot_exp5.py`.
+
+Each experiment writes to its own folder: data to `output/<exp>/` and figures to
+`output/<exp>/plot/`.
+
 ## Real-time congestion estimation
 
 When rerouting is enabled, Q-DDCA now scores each neighboring node with a
@@ -40,6 +58,18 @@ memory-aware acceptance estimate instead of relying only on past query results:
 ```text
 q_hat = alpha * q_history + (1 - alpha) * (1 - memory_utilization)
 ```
+
+Rerouting never selects a node the qubit has already visited. Forwarding a qubit
+frees a memory slot on the node it came from, which made that node the emptiest
+neighbour and therefore the most attractive one under a memory-weighted score —
+and selecting it dropped the qubit outright. Candidates already on the qubit's
+route are now filtered out before scoring.
+
+The smoothing constant of `q_history = (A + eps) / (T + eps)` is configurable
+too, with `Network(..., smoothing_epsilon=0.5)`. Because epsilon is added to
+numerator and denominator alike it pulls the estimate towards 1.0, not towards a
+neutral 0.5 — it is an optimism knob. An untried neighbour scores 1.0 for any
+epsilon, including 0.
 
 `memory_utilization` is read when the route is selected, so a neighbor whose
 memory suddenly fills is penalized immediately. Configure `alpha` with the
@@ -60,7 +90,7 @@ python exp4.py --attempts 1,2,3,4,5,6,7,8,9,10
 python plot_comparison.py
 ```
 
-The default output is `output/exp4.csv`. Each
+The default output is `output/exp4/exp4.csv`. Each
 window size has two rows: historical-only Q-DDCA (`alpha=1.0`) and real-time
 memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
 request pairs. `mean_request_throughput_pairs_s` is the average successful
@@ -73,7 +103,7 @@ along with all simulation parameters needed to reproduce the sweep. The optional
 fairness index over the completed qubits for each request.
 
 `plot_comparison.py` writes IEEE single-column vector PDF and 600-dpi PNG
-figures to `output/graphs/ieee/`:
+figures to `output/exp4/plot/`:
 
 1. EDR versus send rate/window size (`w`)
 2. EDR versus maximum attempts (`M`)
@@ -87,7 +117,7 @@ attempt-based figures use the largest `w`. Use `--fixed-attempts` and
 plot time, for example:
 
 ```bash
-python plot_comparison.py --input output/exp4.csv output/exp4_attempt_sweep.csv
+python plot_comparison.py --input output/exp4/exp4.csv output/exp4/exp4_attempt_sweep.csv
 ```
 
 The default style matches the supplied IEEE manuscript: Times-family text,

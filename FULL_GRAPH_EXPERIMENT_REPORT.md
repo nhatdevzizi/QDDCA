@@ -59,7 +59,7 @@ request pairs before accepting a result.
 ### 3.1 Sending-rate sweep
 
 ```powershell
-.venv\Scripts\python.exe exp4.py --windows 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 --send-max-try 10 --seeds 101,202,303 --output output\exp4_window_sweep.csv
+.venv\Scripts\python.exe exp4.py --windows 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 --send-max-try 10 --seeds 101,202,303 --output output\exp4\exp4_window_sweep.csv
 ```
 
 The run executed 180 simulations:
@@ -69,12 +69,12 @@ The run executed 180 simulations:
 ```
 
 It completed successfully and wrote 60 aggregate rows to
-`output\exp4_window_sweep.csv`.
+`output\exp4\exp4_window_sweep.csv`.
 
 ### 3.2 Attempt-count sweep
 
 ```powershell
-.venv\Scripts\python.exe exp4.py --windows 30 --attempts 1,2,3,4,5,6,7,8,9,10 --seeds 101,202,303 --output output\exp4_attempt_sweep.csv
+.venv\Scripts\python.exe exp4.py --windows 30 --attempts 1,2,3,4,5,6,7,8,9,10 --seeds 101,202,303 --output output\exp4\exp4_attempt_sweep.csv
 ```
 
 The run executed 60 simulations:
@@ -84,12 +84,12 @@ The run executed 60 simulations:
 ```
 
 It completed successfully and wrote 20 aggregate rows to
-`output\exp4_attempt_sweep.csv`.
+`output\exp4\exp4_attempt_sweep.csv`.
 
 ### 3.3 Figure generation
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\exp4_window_sweep.csv output\exp4_attempt_sweep.csv --output-dir output\graphs\ieee --strict
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\exp4_window_sweep.csv output\exp4\exp4_attempt_sweep.csv --output-dir output\exp4\plot --strict
 ```
 
 The plotter merged the files using `(window_size, send_max_try, algorithm)` as
@@ -159,15 +159,15 @@ standard deviations, and `--error-bars` can display them.
 
 ### Data
 
-- `output\exp4_window_sweep.csv`: 60 aggregate rows covering `w = 1, ..., 30`
+- `output\exp4\exp4_window_sweep.csv`: 60 aggregate rows covering `w = 1, ..., 30`
   at `M = 10`.
-- `output\exp4_attempt_sweep.csv`: 20 aggregate rows covering `M = 1, ..., 10`
+- `output\exp4\exp4_attempt_sweep.csv`: 20 aggregate rows covering `M = 1, ..., 10`
   at `w = 30`.
 
 ### IEEE figures
 
 Each graph has a vector PDF and a 600-dpi PNG under
-`output\graphs\ieee\`:
+`output\exp4\plot\`:
 
 1. `01_edr_vs_send_rate.pdf` and `.png`
 2. `02_edr_vs_attempts.pdf` and `.png`

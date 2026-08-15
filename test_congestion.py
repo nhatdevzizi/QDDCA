@@ -149,6 +149,57 @@ class RealTimeCongestionTests(unittest.TestCase):
             [0.25, 0.25],
         )
 
+    def test_smoothing_epsilon_shifts_the_historical_estimate(self):
+        """Epsilon is added to numerator and denominator, so it pulls towards 1."""
+        self.sender.query_list[self.neighbor] = [True] * 9 + [False]
+
+        for epsilon, expected in ((0.0, 0.9), (0.5, 9.5 / 10.5), (2.0, 11.0 / 12.0)):
+            sender = QNNode("sender", smoothing_epsilon=epsilon)
+            sender.query_list[self.neighbor] = [True] * 9 + [False]
+            self.assertAlmostEqual(sender.historical_stat2(self.neighbor), expected)
+
+    def test_untried_neighbour_scores_one_even_at_epsilon_zero(self):
+        """eps/eps = 1 for any eps > 0; eps = 0 would be 0/0 without the guard."""
+        for epsilon in (0.0, 0.5, 3.0):
+            sender = QNNode("sender", smoothing_epsilon=epsilon)
+            self.assertEqual(sender.historical_stat2(self.neighbor), 1.0)
+            self.assertEqual(sender.stat(), 1.0)
+
+    def test_smoothing_epsilon_is_validated_and_propagated(self):
+        with self.assertRaises(ValueError):
+            QNNode("invalid", smoothing_epsilon=-0.1)
+        with self.assertRaises(ValueError):
+            Network(smoothing_epsilon=-0.1)
+
+        network = Network(n=2, p=1.0, smoothing_epsilon=0.25)
+        network.build()
+        self.assertEqual([node.smoothing_epsilon for node in network.nodes], [0.25, 0.25])
+
+    def test_routing_never_returns_to_a_node_the_qubit_has_visited(self):
+        """An empty previous hop is the most attractive neighbour by memory alone.
+
+        Forwarding a qubit frees a slot on the node it came from, so that node
+        often looks emptiest. Selecting it used to drop the qubit outright.
+        """
+        destination = QNNode("destination")
+        visited = QNNode("visited", memorySize=10)
+        onward = QNNode("onward", memorySize=10)
+        onward.currentSize = 5  # less inviting than the empty node behind us
+        candidates = [(visited, object(), 2), (onward, object(), 2)]
+        sender = QNNode("sender", allow_reroute=True, congestion_history_weight=0.0)
+        sender.dest = destination
+        sender.net = FakeNetwork(sender, destination, candidates)
+        sender.query_list = {visited: [True] * 10, onward: [True] * 10}
+
+        qubit = FakeQubit(sender)
+        qubit.route = [sender, visited]
+
+        with patch("entity.random.random", return_value=1.0):
+            _, selected, selected_link = sender.route(qubit)
+
+        self.assertIs(selected, onward)
+        self.assertIsNotNone(selected_link)
+
     def test_routing_avoids_a_neighbor_that_is_currently_full(self):
         destination = QNNode("destination")
         full = QNNode("full", memorySize=10)

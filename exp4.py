@@ -80,7 +80,27 @@ def jain_fairness(allocations):
     return total * total / (len(allocations) * sum_of_squares)
 
 
-def run_simulation(args, seed, window_size, send_max_try, algorithm, history_weight):
+def signal_gap_snapshot(network):
+    """Sample q_history - (1 - rho) for every neighbor a sender has observed.
+
+    That difference is exactly the partial derivative of the Section 7 estimator
+    with respect to alpha, so it measures how much alpha can influence routing.
+    Sampled once at the end of the run, not averaged over time.
+    """
+    from entity import QNNode
+
+    gaps = []
+    for sender in network.s:
+        for neighbor, history in sender.query_list.items():
+            if not history:
+                continue
+            availability = 1.0 - QNNode.memory_utilization(neighbor)
+            gaps.append(sender.historical_stat2(neighbor) - availability)
+    return gaps
+
+
+def run_simulation(args, seed, window_size, send_max_try, algorithm, history_weight,
+                   epsilon=0.5):
     """Run one simulation replicate and return its raw measurements."""
     from qns.simulator.simulator import Simulator
 
@@ -103,6 +123,7 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         delay=args.link_delay,
         buffer=args.link_buffer,
         congestion_history_weight=history_weight,
+        smoothing_epsilon=epsilon,
     )
     network.install(simulator)
     signature = topology_signature(network)
@@ -117,6 +138,7 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
     dropped = sum(len(source.dropList) for source in network.s)
     in_flight = sum(len(source.sendingList) for source in network.s)
     per_request_throughput = [count / args.duration for count in completed_by_request]
+    signal_gaps = signal_gap_snapshot(network)
 
     return {
         "seed": seed,
@@ -124,6 +146,7 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         "send_max_try": send_max_try,
         "algorithm": algorithm,
         "congestion_history_weight": history_weight,
+        "smoothing_epsilon": epsilon,
         "mean_request_throughput_pairs_s": statistics.fmean(per_request_throughput),
         "total_edr_pairs_s": completed / args.duration,
         "completed_pairs": completed,
@@ -132,6 +155,8 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         "fairness_index": jain_fairness(completed_by_request),
         "topology_signature": signature,
         "request_pairs": request_pairs,
+        "mean_signal_gap": statistics.fmean(signal_gaps) if signal_gaps else 0.0,
+        "mean_abs_signal_gap": statistics.fmean(abs(gap) for gap in signal_gaps) if signal_gaps else 0.0,
     }
 
 
@@ -213,12 +238,12 @@ def aggregate_measurements(measurements, args):
     return rows
 
 
-def write_csv(rows, output_path):
+def write_csv(rows, output_path, fields=CSV_FIELDS):
     """Write aggregate experiment rows to a stable CSV schema."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS)
+        writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for row in rows:
             writer.writerow({
@@ -229,7 +254,7 @@ def write_csv(rows, output_path):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default="output/exp4.csv")
+    parser.add_argument("--output", default="output/exp4/exp4.csv")
     parser.add_argument("--windows", type=parse_int_list, default=(5, 10, 15, 20, 25, 30))
     parser.add_argument("--seeds", type=parse_int_list, default=(101, 202, 303))
     parser.add_argument("--duration", type=float, default=10.0)

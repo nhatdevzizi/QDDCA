@@ -5,13 +5,16 @@ import qns.utils.log as log
 import sys
 from collections import Counter
 from qns.entity.timer.timer import Timer
+from pathlib import Path
 
 from entity import QNNode, Link
 import numpy as np
 random.seed(1)
 randomstate = random.getstate()
 
-f = open("output/tmp_2.csv","w", buffering=1)
+OUTPUT = Path("output/exp3/tmp_2.csv")
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+f = open(OUTPUT, "w", buffering=1)
 
 class FixTopoNetwork(Network):
     def build(self):

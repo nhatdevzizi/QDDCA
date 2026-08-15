@@ -70,12 +70,16 @@ class QNNode(QNode):
 
     def __init__(self, name: str, isSender=False, dest=None, memorySize=10, windowSize=10, queryTime=0.02,
                  start_time: float = 0, end_time: float = None, send_max_try=100, allow_reroute=False,
-                 random_memory=False, congestion_history_weight=0.5):
+                 random_memory=False, congestion_history_weight=0.5, smoothing_epsilon=0.5):
         self.name = name
 
         if not 0.0 <= congestion_history_weight <= 1.0:
             raise ValueError("congestion_history_weight must be between 0 and 1")
         self.congestion_history_weight = congestion_history_weight
+
+        if smoothing_epsilon < 0.0:
+            raise ValueError("smoothing_epsilon must not be negative")
+        self.smoothing_epsilon = smoothing_epsilon
 
         # Sender configuration
         self.isSender = isSender  # Whether this is a sender node
@@ -295,6 +299,13 @@ class QNNode(QNode):
             else:
                 lmt = min_mt
 
+            # Skip nodes this qubit has already visited. Selecting one used to
+            # drop the qubit outright below, and the memory term makes the
+            # previous hop the most attractive neighbour precisely because
+            # forwarding the qubit just freed a slot there.
+            if np in qubit.route:
+                continue
+
             if mt > lmt:
                 continue
             if len(qubit.route) + mt > Lmax:
@@ -313,6 +324,8 @@ class QNNode(QNode):
         if min_y > metric_drop:
             return currhop, None, None
 
+        # Guard: nexthop still holds its rt[0][0] default if nothing was
+        # selected, so keep enforcing the no-revisit invariant here too.
         if nexthop in qubit.route:
             return currhop, None, None
 
@@ -371,13 +384,10 @@ class QNNode(QNode):
 
     def stat(self):
         """Calculate the historical query success rate."""
-        delta = 0.5
-        nt = 0
-        na = len(self.query_ans)
-        for ans in self.query_ans:
-            if ans:
-                nt += 1
-        return (nt + delta) / (na + delta)
+        if not self.query_ans:
+            return 1.0
+        nt = sum(1 for ans in self.query_ans if ans)
+        return (nt + self.smoothing_epsilon) / (len(self.query_ans) + self.smoothing_epsilon)
 
     def update(self, ret):
         """Update the query result history."""
@@ -394,15 +404,18 @@ class QNNode(QNode):
         return self.congestion_state(node).estimated_acceptance
 
     def historical_stat2(self, node):
-        """Calculate the smoothed historical query success rate for a node."""
-        delta = 0.5
-        nt = 0
+        """Calculate the smoothed historical query success rate for a node.
+
+        Epsilon is added to numerator and denominator alike, so it pulls the
+        estimate towards 1.0 rather than towards 0.5 -- it is an optimism knob.
+        """
         history = self.query_list.get(node, [])
-        na = len(history)
-        for ans in history:
-            if ans:
-                nt += 1
-        return (nt + delta) / (na + delta)
+        if not history:
+            # Untried neighbour: optimistic. Any epsilon > 0 gives eps/eps = 1.0
+            # anyway; the guard is what makes epsilon = 0 well defined.
+            return 1.0
+        nt = sum(1 for ans in history if ans)
+        return (nt + self.smoothing_epsilon) / (len(history) + self.smoothing_epsilon)
 
     @staticmethod
     def memory_utilization(node):

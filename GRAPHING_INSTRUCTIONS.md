@@ -42,7 +42,7 @@ This creates the data for:
 - Jain fairness versus sending rate `w`.
 
 ```powershell
-.venv\Scripts\python.exe exp4.py --windows 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 --send-max-try 10 --seeds 101,202,303 --output output\exp4_window_sweep.csv
+.venv\Scripts\python.exe exp4.py --windows 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30 --send-max-try 10 --seeds 101,202,303 --output output\exp4\exp4_window_sweep.csv
 ```
 
 ## 4. Run the full attempt-count sweep
@@ -53,7 +53,7 @@ This creates the data for:
 - Dropped qubits versus maximum attempts `M`.
 
 ```powershell
-.venv\Scripts\python.exe exp4.py --windows 30 --attempts 1,2,3,4,5,6,7,8,9,10 --seeds 101,202,303 --output output\exp4_attempt_sweep.csv
+.venv\Scripts\python.exe exp4.py --windows 30 --attempts 1,2,3,4,5,6,7,8,9,10 --seeds 101,202,303 --output output\exp4\exp4_attempt_sweep.csv
 ```
 
 Both algorithms use the same topology, request pairs, and seed for each paired
@@ -63,7 +63,7 @@ intended for the same paper evaluation.
 ## 5. Draw all four IEEE figures
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\exp4_window_sweep.csv output\exp4_attempt_sweep.csv --output-dir output\graphs\ieee --strict
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\exp4_window_sweep.csv output\exp4\exp4_attempt_sweep.csv --output-dir output\exp4\plot --strict
 ```
 
 `--strict` makes the command fail if either CSV is missing the data variation
@@ -72,7 +72,7 @@ and one 600-dpi PNG for each graph.
 
 ## 6. Output files
 
-The following files are created under `output\graphs\ieee\`:
+The following files are created under `output\exp4\plot\`:
 
 | Graph | PDF for the paper | PNG preview |
 | --- | --- | --- |
@@ -90,19 +90,19 @@ systems that cannot accept PDF figures.
 Generate additional vector formats:
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\exp4_window_sweep.csv output\exp4_attempt_sweep.csv --formats pdf,png,svg,eps
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\exp4_window_sweep.csv output\exp4\exp4_attempt_sweep.csv --formats pdf,png,svg,eps
 ```
 
 Generate double-column figures:
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\exp4_window_sweep.csv output\exp4_attempt_sweep.csv --column-width double
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\exp4_window_sweep.csv output\exp4\exp4_attempt_sweep.csv --column-width double
 ```
 
 Show population-standard-deviation error bars:
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\exp4_window_sweep.csv output\exp4_attempt_sweep.csv --error-bars
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\exp4_window_sweep.csv output\exp4\exp4_attempt_sweep.csv --error-bars
 ```
 
 The default has no error bars because it follows the figure pattern in
@@ -111,7 +111,7 @@ The default has no error bars because it follows the figure pattern in
 Select different fixed slices when the CSV contains a larger parameter grid:
 
 ```powershell
-.venv\Scripts\python.exe plot_comparison.py --input output\full_grid.csv --fixed-window 20 --fixed-attempts 5
+.venv\Scripts\python.exe plot_comparison.py --input output\exp4\full_grid.csv --fixed-window 20 --fixed-attempts 5
 ```
 
 ## 8. Validate the project
@@ -125,8 +125,8 @@ Run the automated tests:
 Check that the expected parameter values exist in the CSV files:
 
 ```powershell
-Import-Csv output\exp4_window_sweep.csv | Select-Object -ExpandProperty window_size -Unique
-Import-Csv output\exp4_attempt_sweep.csv | Select-Object -ExpandProperty send_max_try -Unique
+Import-Csv output\exp4\exp4_window_sweep.csv | Select-Object -ExpandProperty window_size -Unique
+Import-Csv output\exp4\exp4_attempt_sweep.csv | Select-Object -ExpandProperty send_max_try -Unique
 ```
 
 The first command should list `1` through `30`; the second should list `1`
@@ -153,7 +153,7 @@ step 4 and pass both CSV files to `--input`.
 ### Sending-rate graphs have too few points
 
 Run the complete `w = 1, ..., 30` command in step 3. A shorter CSV such as
-`output\exp4.csv` may contain only selected windows and will therefore produce
+`output\exp4\exp4.csv` may contain only selected windows and will therefore produce
 a shorter curve.
 
 ### Reproduce the manuscript style
