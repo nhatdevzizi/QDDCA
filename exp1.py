@@ -4,6 +4,7 @@ from qns.simulator.simulator import Simulator
 import qns.utils.log as log
 import sys
 from collections import Counter
+from pathlib import Path
 import numpy as np
 
 # random.seed(0)
@@ -11,7 +12,9 @@ import numpy as np
 random.seed(120)
 randomstate = random.getstate()
 
-f = open("output/exp2-7.1.csv","w", buffering=1)
+OUTPUT = Path("output/exp1/exp2-7.1.csv")
+OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+f = open(OUTPUT, "w", buffering=1)
 
 
 

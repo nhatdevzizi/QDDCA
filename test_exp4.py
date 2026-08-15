@@ -60,7 +60,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(jain_fairness([0, 0]), 0.0)
 
     def test_default_output_matches_project_experiment_template(self):
-        self.assertEqual(build_parser().parse_args([]).output, "output/exp4.csv")
+        self.assertEqual(build_parser().parse_args([]).output, "output/exp4/exp4.csv")
 
     def test_aggregate_calculates_improvement_against_baseline(self):
         baseline, improved = aggregate_measurements(self.measurements, self.args)

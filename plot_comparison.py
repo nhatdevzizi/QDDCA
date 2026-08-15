@@ -24,9 +24,9 @@ ALGORITHM_STYLES = {
         "linestyle": "-",
     },
     "real_time_memory_aware": {
-        "color": "#D89000",
+        "color": "#b8860b",
         "marker": "^",
-        "markerfacecolor": "#D89000",
+        "markerfacecolor": "#b8860b",
         "linestyle": "-",
     },
 }
@@ -115,7 +115,10 @@ def apply_ieee_style(plt):
     """Apply the compact serif style used by the supplied IEEE manuscript."""
     plt.rcParams.update({
         "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "Nimbus Roman No9 L"],
+        # Liberation Serif and Nimbus Roman are metric-compatible with Times and
+        # are what Linux distributions actually ship.
+        "font.serif": ["Times New Roman", "Times", "Liberation Serif",
+                       "Nimbus Roman", "Nimbus Roman No9 L", "DejaVu Serif"],
         "mathtext.fontset": "stix",
         "font.size": 7.0,
         "axes.titlesize": 7.2,
@@ -217,7 +220,7 @@ def build_parser():
         default=("output/exp4.csv",),
         help="one or more exp4 CSV files to merge for plotting",
     )
-    parser.add_argument("--output-dir", default="output/graphs/ieee")
+    parser.add_argument("--output-dir", default="output/exp4/plot")
     parser.add_argument(
         "--fixed-window",
         type=int,
