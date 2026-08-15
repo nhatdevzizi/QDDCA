@@ -4,7 +4,14 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from exp4 import CSV_FIELDS, aggregate_measurements, build_parser, parse_int_list, write_csv
+from exp4 import (
+    CSV_FIELDS,
+    aggregate_measurements,
+    build_parser,
+    jain_fairness,
+    parse_int_list,
+    write_csv,
+)
 
 
 class MeasurementExportTests(unittest.TestCase):
@@ -47,6 +54,11 @@ class MeasurementExportTests(unittest.TestCase):
     def test_parse_int_list(self):
         self.assertEqual(parse_int_list("5, 10,15"), (5, 10, 15))
 
+    def test_jain_fairness(self):
+        self.assertEqual(jain_fairness([10, 10, 10]), 1.0)
+        self.assertAlmostEqual(jain_fairness([10, 0]), 0.5)
+        self.assertEqual(jain_fairness([0, 0]), 0.0)
+
     def test_default_output_matches_project_experiment_template(self):
         self.assertEqual(build_parser().parse_args([]).output, "output/exp4.csv")
 
@@ -72,6 +84,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(len(exported), 2)
         self.assertEqual(exported[1]["algorithm"], "real_time_memory_aware")
         self.assertEqual(exported[1]["total_edr_pairs_s"], "26.000000")
+        self.assertIn("mean_fairness_index", exported[1])
 
 
 if __name__ == "__main__":

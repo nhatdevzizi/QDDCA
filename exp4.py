@@ -42,6 +42,8 @@ CSV_FIELDS = (
     "mean_completed_pairs",
     "mean_dropped_pairs",
     "mean_in_flight_pairs",
+    "mean_fairness_index",
+    "fairness_std",
     "throughput_change_pct_vs_historical",
     "edr_change_pct_vs_historical",
 )
@@ -63,7 +65,22 @@ def topology_signature(network):
     return hashlib.sha256(payload).hexdigest()[:12]
 
 
-def run_simulation(args, seed, window_size, algorithm, history_weight):
+def jain_fairness(allocations):
+    """Return Jain's fairness index for non-negative resource allocations.
+
+    A run that completes no pairs has no useful allocation, so its fairness is
+    reported as zero instead of treating an all-zero vector as perfectly fair.
+    """
+    if not allocations:
+        return 0.0
+    total = sum(allocations)
+    sum_of_squares = sum(value * value for value in allocations)
+    if total == 0 or sum_of_squares == 0:
+        return 0.0
+    return total * total / (len(allocations) * sum_of_squares)
+
+
+def run_simulation(args, seed, window_size, send_max_try, algorithm, history_weight):
     """Run one simulation replicate and return its raw measurements."""
     from qns.simulator.simulator import Simulator
 
@@ -80,7 +97,7 @@ def run_simulation(args, seed, window_size, algorithm, history_weight):
         memorySize=args.memory_size,
         windowSize=window_size,
         queryTime=args.query_time,
-        send_max_try=args.send_max_try,
+        send_max_try=send_max_try,
         allow_reroute=True,
         rate=args.link_rate,
         delay=args.link_delay,
@@ -104,6 +121,7 @@ def run_simulation(args, seed, window_size, algorithm, history_weight):
     return {
         "seed": seed,
         "window_size": window_size,
+        "send_max_try": send_max_try,
         "algorithm": algorithm,
         "congestion_history_weight": history_weight,
         "mean_request_throughput_pairs_s": statistics.fmean(per_request_throughput),
@@ -111,6 +129,7 @@ def run_simulation(args, seed, window_size, algorithm, history_weight):
         "completed_pairs": completed,
         "dropped_pairs": dropped,
         "in_flight_pairs": in_flight,
+        "fairness_index": jain_fairness(completed_by_request),
         "topology_signature": signature,
         "request_pairs": request_pairs,
     }
@@ -126,54 +145,71 @@ def percent_change(value, baseline):
 def aggregate_measurements(measurements, args):
     """Aggregate paired replicates into graph-ready rows."""
     rows = []
+    attempt_values = getattr(args, "attempts", None) or (args.send_max_try,)
     for window_size in args.windows:
-        grouped = {
-            algorithm: [
-                item
-                for item in measurements
-                if item["window_size"] == window_size and item["algorithm"] == algorithm
-            ]
-            for algorithm, _ in ALGORITHMS
-        }
-        baseline = grouped["historical_only"]
-        baseline_throughput = statistics.fmean(
-            item["mean_request_throughput_pairs_s"] for item in baseline
-        )
-        baseline_edr = statistics.fmean(item["total_edr_pairs_s"] for item in baseline)
+        for send_max_try in attempt_values:
+            grouped = {
+                algorithm: [
+                    item
+                    for item in measurements
+                    if item["window_size"] == window_size
+                    and item.get("send_max_try", args.send_max_try) == send_max_try
+                    and item["algorithm"] == algorithm
+                ]
+                for algorithm, _ in ALGORITHMS
+            }
+            baseline = grouped["historical_only"]
+            baseline_throughput = statistics.fmean(
+                item["mean_request_throughput_pairs_s"] for item in baseline
+            )
+            baseline_edr = statistics.fmean(item["total_edr_pairs_s"] for item in baseline)
 
-        for algorithm, history_weight in ALGORITHMS:
-            samples = grouped[algorithm]
-            throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
-            edrs = [item["total_edr_pairs_s"] for item in samples]
-            mean_throughput = statistics.fmean(throughputs)
-            mean_edr = statistics.fmean(edrs)
-            rows.append({
-                "window_size": window_size,
-                "send_max_try": args.send_max_try,
-                "request_count": args.requests,
-                "simulation_duration_s": args.duration,
-                "simulator_accuracy": args.accuracy,
-                "node_count": args.nodes,
-                "edge_probability": args.edge_probability,
-                "memory_size": args.memory_size,
-                "query_time_s": args.query_time,
-                "link_rate_pairs_s": args.link_rate,
-                "link_delay_s": args.link_delay,
-                "link_buffer": args.link_buffer,
-                "repetitions": len(args.seeds),
-                "seeds": ";".join(str(seed) for seed in args.seeds),
-                "algorithm": algorithm,
-                "congestion_history_weight": history_weight,
-                "mean_request_throughput_pairs_s": mean_throughput,
-                "throughput_std_pairs_s": statistics.pstdev(throughputs),
-                "total_edr_pairs_s": mean_edr,
-                "edr_std_pairs_s": statistics.pstdev(edrs),
-                "mean_completed_pairs": statistics.fmean(item["completed_pairs"] for item in samples),
-                "mean_dropped_pairs": statistics.fmean(item["dropped_pairs"] for item in samples),
-                "mean_in_flight_pairs": statistics.fmean(item["in_flight_pairs"] for item in samples),
-                "throughput_change_pct_vs_historical": percent_change(mean_throughput, baseline_throughput),
-                "edr_change_pct_vs_historical": percent_change(mean_edr, baseline_edr),
-            })
+            for algorithm, history_weight in ALGORITHMS:
+                samples = grouped[algorithm]
+                throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
+                edrs = [item["total_edr_pairs_s"] for item in samples]
+                fairness = [item.get("fairness_index", 0.0) for item in samples]
+                mean_throughput = statistics.fmean(throughputs)
+                mean_edr = statistics.fmean(edrs)
+                rows.append({
+                    "window_size": window_size,
+                    "send_max_try": send_max_try,
+                    "request_count": args.requests,
+                    "simulation_duration_s": args.duration,
+                    "simulator_accuracy": args.accuracy,
+                    "node_count": args.nodes,
+                    "edge_probability": args.edge_probability,
+                    "memory_size": args.memory_size,
+                    "query_time_s": args.query_time,
+                    "link_rate_pairs_s": args.link_rate,
+                    "link_delay_s": args.link_delay,
+                    "link_buffer": args.link_buffer,
+                    "repetitions": len(args.seeds),
+                    "seeds": ";".join(str(seed) for seed in args.seeds),
+                    "algorithm": algorithm,
+                    "congestion_history_weight": history_weight,
+                    "mean_request_throughput_pairs_s": mean_throughput,
+                    "throughput_std_pairs_s": statistics.pstdev(throughputs),
+                    "total_edr_pairs_s": mean_edr,
+                    "edr_std_pairs_s": statistics.pstdev(edrs),
+                    "mean_completed_pairs": statistics.fmean(
+                        item["completed_pairs"] for item in samples
+                    ),
+                    "mean_dropped_pairs": statistics.fmean(
+                        item["dropped_pairs"] for item in samples
+                    ),
+                    "mean_in_flight_pairs": statistics.fmean(
+                        item["in_flight_pairs"] for item in samples
+                    ),
+                    "mean_fairness_index": statistics.fmean(fairness),
+                    "fairness_std": statistics.pstdev(fairness),
+                    "throughput_change_pct_vs_historical": percent_change(
+                        mean_throughput, baseline_throughput
+                    ),
+                    "edr_change_pct_vs_historical": percent_change(
+                        mean_edr, baseline_edr
+                    ),
+                })
     return rows
 
 
@@ -203,6 +239,11 @@ def build_parser():
     parser.add_argument("--requests", type=int, default=5)
     parser.add_argument("--memory-size", type=int, default=10)
     parser.add_argument("--send-max-try", type=int, default=10)
+    parser.add_argument(
+        "--attempts",
+        type=parse_int_list,
+        help="comma-separated maximum-attempt sweep; defaults to --send-max-try",
+    )
     parser.add_argument("--query-time", type=float, default=0.05)
     parser.add_argument("--link-rate", type=float, default=1000.0)
     parser.add_argument("--link-delay", type=float, default=0.001)
@@ -212,18 +253,27 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
+    attempt_values = args.attempts or (args.send_max_try,)
     measurements = []
     for window_size in args.windows:
-        for seed in args.seeds:
-            paired_signatures = set()
-            paired_requests = set()
-            for algorithm, history_weight in ALGORITHMS:
-                result = run_simulation(args, seed, window_size, algorithm, history_weight)
-                measurements.append(result)
-                paired_signatures.add(result["topology_signature"])
-                paired_requests.add(result["request_pairs"])
-            if len(paired_signatures) != 1 or len(paired_requests) != 1:
-                raise RuntimeError("paired algorithms did not receive identical scenarios")
+        for send_max_try in attempt_values:
+            for seed in args.seeds:
+                paired_signatures = set()
+                paired_requests = set()
+                for algorithm, history_weight in ALGORITHMS:
+                    result = run_simulation(
+                        args,
+                        seed,
+                        window_size,
+                        send_max_try,
+                        algorithm,
+                        history_weight,
+                    )
+                    measurements.append(result)
+                    paired_signatures.add(result["topology_signature"])
+                    paired_requests.add(result["request_pairs"])
+                if len(paired_signatures) != 1 or len(paired_requests) != 1:
+                    raise RuntimeError("paired algorithms did not receive identical scenarios")
 
     rows = aggregate_measurements(measurements, args)
     write_csv(rows, args.output)
