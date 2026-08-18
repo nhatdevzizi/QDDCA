@@ -30,14 +30,16 @@ ALGORITHM_STYLES = {
         "linestyle": "-",
     },
 }
-NUMERIC_FIELDS = {
+REQUIRED_NUMERIC_FIELDS = {
     "window_size": int,
     "send_max_try": int,
     "total_edr_pairs_s": float,
     "edr_std_pairs_s": float,
     "mean_dropped_pairs": float,
-    "mean_fairness_index": float,
-    "fairness_std": float,
+}
+OPTIONAL_NUMERIC_FIELDS = {
+    "mean_edr_cv": float,
+    "edr_cv_std": float,
 }
 
 
@@ -45,15 +47,28 @@ def read_results(path):
     """Read and validate aggregate results produced by exp4.py."""
     with Path(path).open(newline="", encoding="utf-8") as stream:
         reader = csv.DictReader(stream)
-        missing = set(NUMERIC_FIELDS) - set(reader.fieldnames or ())
+        fieldnames = set(reader.fieldnames or ())
+        missing = set(REQUIRED_NUMERIC_FIELDS) - fieldnames
         if missing:
             raise ValueError(
                 "input is missing required columns: " + ", ".join(sorted(missing))
             )
+        present_optional = set(OPTIONAL_NUMERIC_FIELDS) & fieldnames
+        if present_optional and present_optional != set(OPTIONAL_NUMERIC_FIELDS):
+            missing_optional = set(OPTIONAL_NUMERIC_FIELDS) - present_optional
+            raise ValueError(
+                "input has an incomplete CV schema; missing: "
+                + ", ".join(sorted(missing_optional))
+            )
+        numeric_fields = dict(REQUIRED_NUMERIC_FIELDS)
+        numeric_fields.update({
+            field: OPTIONAL_NUMERIC_FIELDS[field]
+            for field in present_optional
+        })
         rows = []
         for csv_row in reader:
             row = dict(csv_row)
-            for field, converter in NUMERIC_FIELDS.items():
+            for field, converter in numeric_fields.items():
                 row[field] = converter(row[field])
             rows.append(row)
     if not rows:
@@ -176,9 +191,8 @@ def draw_graph(
     axis.grid(False)
     axis.tick_params(direction="out", pad=1.5)
     axis.legend(frameon=False, loc="best", handlelength=2.2, borderaxespad=0.25)
-    if y_field == "mean_fairness_index":
-        lower = min(row[y_field] for row in rows)
-        axis.set_ylim(max(0.0, lower - 0.05), 1.01)
+    if y_field == "mean_edr_cv":
+        axis.set_ylim(bottom=0.0)
     figure.subplots_adjust(left=0.17, right=0.985, bottom=0.19, top=0.89)
     for output_format in formats:
         output_path = output_base.with_suffix(f".{output_format}")
@@ -217,8 +231,8 @@ def build_parser():
     parser.add_argument(
         "--input",
         nargs="+",
-        default=("output/exp4.csv",),
-        help="one or more exp4 CSV files to merge for plotting",
+        default=("output/exp4/exp4.csv",),
+        help="one or more aggregated exp4 CSV files to merge for plotting",
     )
     parser.add_argument("--output-dir", default="output/exp4/plot")
     parser.add_argument(
@@ -275,7 +289,7 @@ def main():
     apply_ieee_style(plt)
     formats = (args.format,) if args.format else args.formats
     width = 3.5 if args.column_width == "single" else 7.16
-    graph_specs = (
+    graph_specs = [
         (
             by_send_rate,
             "window_size",
@@ -306,17 +320,27 @@ def main():
             "03_dropped_vs_attempts",
             None,
         ),
-        (
+    ]
+    cv_fields = {"mean_edr_cv", "edr_cv_std"}
+    if all(cv_fields <= set(row) for row in by_send_rate):
+        graph_specs.append((
             by_send_rate,
             "window_size",
-            "mean_fairness_index",
+            "mean_edr_cv",
             r"Sending rate, $w$",
-            "Jain fairness index",
-            rf"Resource Fairness vs. Sending Rate ($M={fixed_attempts}$)",
+            "Coefficient of variation (CV)",
+            rf"EDR Fairness vs. Sending Rate ($M={fixed_attempts}$)",
             "04_fairness_vs_send_rate",
-            "fairness_std",
-        ),
-    )
+            "edr_cv_std",
+        ))
+    else:
+        message = (
+            "Skipping 04_fairness_vs_send_rate: aggregate input lacks "
+            "mean_edr_cv and edr_cv_std; rerun the sending-rate sweep"
+        )
+        if args.strict:
+            raise ValueError(message)
+        print(message)
     for spec in graph_specs:
         *draw_args, filename, yerr = spec
         rows_for_graph, x_field = draw_args[:2]

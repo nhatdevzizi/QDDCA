@@ -86,11 +86,14 @@ documented in [`FULL_GRAPH_EXPERIMENT_REPORT.md`](FULL_GRAPH_EXPERIMENT_REPORT.m
 Run a paired baseline-versus-improved sweep and create graph-ready results:
 
 ```bash
-python exp4.py --attempts 1,2,3,4,5,6,7,8,9,10
+python exp4.py --sweep attempts
 python plot_comparison.py
 ```
 
-The default output is `output/exp4/exp4.csv`. Each
+The default experiment uses the 50 reproducible seeds `1` through `50`. It
+writes every individual measurement to `output/exp4/exp4_raw.csv`, calculates
+the mean and population standard deviation across those seeds, and writes the
+graph-ready result to `output/exp4/exp4.csv`. Each
 window size has two rows: historical-only Q-DDCA (`alpha=1.0`) and real-time
 memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
 request pairs. `mean_request_throughput_pairs_s` is the average successful
@@ -99,8 +102,15 @@ paper's definition of total network EDR. Standard deviations and percentage
 changes versus the historical baseline are included for plotting and analysis,
 along with all simulation parameters needed to reproduce the sweep. The optional
 `--attempts` argument adds a maximum-attempt sweep while preserving the original
-`--send-max-try 10` default when it is omitted. Fairness is exported as Jain's
-fairness index over the completed qubits for each request.
+`--send-max-try 10` default when it is omitted. Fairness is exported as the
+coefficient of variation of per-request EDR: population standard deviation
+divided by mean EDR, where lower values indicate fairer allocation.
+
+Use `--sweep send-rate` for the targeted `w=1..30, M=10` run and `--sweep
+attempts` for the targeted `w=30, M=1..10` run. These presets select distinct
+output filenames, print paired-scenario progress, and checkpoint the raw CSV
+after every seed. Custom `--windows` and `--attempts` values remain available
+with the default `--sweep custom` mode.
 
 `plot_comparison.py` writes IEEE single-column vector PDF and 600-dpi PNG
 figures to `output/exp4/plot/`:
@@ -109,7 +119,7 @@ figures to `output/exp4/plot/`:
 2. EDR versus maximum attempts (`M`)
 3. Dropped qubits versus EDR
 4. Dropped qubits versus maximum attempts (`M`)
-5. Jain resource-allocation fairness versus send rate/window size (`w`)
+5. EDR coefficient of variation versus send rate/window size (`w`)
 
 The send-rate figures use the largest `M` in the CSV by default, and the
 attempt-based figures use the largest `w`. Use `--fixed-attempts` and
@@ -127,6 +137,11 @@ Use `--column-width double`, `--error-bars`, or `--formats pdf,png,svg,eps` when
 needed. A graph is skipped when its CSV data has fewer than two distinct x-axis
 values, avoiding misleading single-point attempt plots. Plotting requires
 Matplotlib.
+
+Pass only the aggregate CSV to `plot_comparison.py`; the `*_raw.csv` file is an
+audit artifact containing one row per seed and algorithm. A custom `--output`
+automatically derives a neighboring `<stem>_raw.csv` path, or `--raw-output`
+can set it explicitly.
 
 See `REPORT.md` for the comparison with the paper's published results and a
 discussion of the measured effect.

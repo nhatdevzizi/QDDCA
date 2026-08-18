@@ -18,6 +18,13 @@ ALGORITHMS = (
     ("real_time_memory_aware", 0.5),
 )
 
+# Fifty deterministic seeds make the default experiment reproducible while
+# still sampling fifty independently generated topology/request scenarios.
+DEFAULT_SEEDS = tuple(range(1, 51))
+DEFAULT_OUTPUT = "output/exp4/exp4.csv"
+SEND_RATE_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
+ATTEMPT_SWEEP_OUTPUT = "output/exp4/exp4_attempt_sweep.csv"
+
 CSV_FIELDS = (
     "window_size",
     "send_max_try",
@@ -42,10 +49,40 @@ CSV_FIELDS = (
     "mean_completed_pairs",
     "mean_dropped_pairs",
     "mean_in_flight_pairs",
-    "mean_fairness_index",
-    "fairness_std",
+    "mean_edr_cv",
+    "edr_cv_std",
     "throughput_change_pct_vs_historical",
     "edr_change_pct_vs_historical",
+)
+
+RAW_CSV_FIELDS = (
+    "seed",
+    "window_size",
+    "send_max_try",
+    "request_count",
+    "simulation_duration_s",
+    "simulator_accuracy",
+    "node_count",
+    "edge_probability",
+    "memory_size",
+    "query_time_s",
+    "link_rate_pairs_s",
+    "link_delay_s",
+    "link_buffer",
+    "algorithm",
+    "congestion_history_weight",
+    "smoothing_epsilon",
+    "mean_request_throughput_pairs_s",
+    "total_edr_pairs_s",
+    "completed_pairs",
+    "dropped_pairs",
+    "in_flight_pairs",
+    "request_edrs_pairs_s",
+    "edr_cv",
+    "topology_signature",
+    "request_pairs",
+    "mean_signal_gap",
+    "mean_abs_signal_gap",
 )
 
 
@@ -65,19 +102,19 @@ def topology_signature(network):
     return hashlib.sha256(payload).hexdigest()[:12]
 
 
-def jain_fairness(allocations):
-    """Return Jain's fairness index for non-negative resource allocations.
+def coefficient_of_variation(values):
+    """Return population standard deviation divided by the arithmetic mean.
 
-    A run that completes no pairs has no useful allocation, so its fairness is
-    reported as zero instead of treating an all-zero vector as perfectly fair.
+    The all-zero case has no positive EDR mean. It is reported as zero because
+    every request has the same EDR, while total EDR separately records that no
+    useful distribution occurred.
     """
-    if not allocations:
+    if not values:
         return 0.0
-    total = sum(allocations)
-    sum_of_squares = sum(value * value for value in allocations)
-    if total == 0 or sum_of_squares == 0:
+    mean = statistics.fmean(values)
+    if mean == 0:
         return 0.0
-    return total * total / (len(allocations) * sum_of_squares)
+    return statistics.pstdev(values) / mean
 
 
 def signal_gap_snapshot(network):
@@ -144,6 +181,16 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         "seed": seed,
         "window_size": window_size,
         "send_max_try": send_max_try,
+        "request_count": args.requests,
+        "simulation_duration_s": args.duration,
+        "simulator_accuracy": args.accuracy,
+        "node_count": args.nodes,
+        "edge_probability": args.edge_probability,
+        "memory_size": args.memory_size,
+        "query_time_s": args.query_time,
+        "link_rate_pairs_s": args.link_rate,
+        "link_delay_s": args.link_delay,
+        "link_buffer": args.link_buffer,
         "algorithm": algorithm,
         "congestion_history_weight": history_weight,
         "smoothing_epsilon": epsilon,
@@ -152,7 +199,10 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         "completed_pairs": completed,
         "dropped_pairs": dropped,
         "in_flight_pairs": in_flight,
-        "fairness_index": jain_fairness(completed_by_request),
+        "request_edrs_pairs_s": ";".join(
+            f"{throughput:.6f}" for throughput in per_request_throughput
+        ),
+        "edr_cv": coefficient_of_variation(per_request_throughput),
         "topology_signature": signature,
         "request_pairs": request_pairs,
         "mean_signal_gap": statistics.fmean(signal_gaps) if signal_gaps else 0.0,
@@ -183,6 +233,16 @@ def aggregate_measurements(measurements, args):
                 ]
                 for algorithm, _ in ALGORITHMS
             }
+            expected_seeds = set(args.seeds)
+            for algorithm, samples in grouped.items():
+                observed_seeds = {item["seed"] for item in samples}
+                if observed_seeds != expected_seeds or len(samples) != len(args.seeds):
+                    raise ValueError(
+                        "cannot aggregate incomplete or duplicate seed data for "
+                        f"window_size={window_size}, send_max_try={send_max_try}, "
+                        f"algorithm={algorithm}: expected {sorted(expected_seeds)}, "
+                        f"observed {sorted(observed_seeds)}"
+                    )
             baseline = grouped["historical_only"]
             baseline_throughput = statistics.fmean(
                 item["mean_request_throughput_pairs_s"] for item in baseline
@@ -193,7 +253,7 @@ def aggregate_measurements(measurements, args):
                 samples = grouped[algorithm]
                 throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
                 edrs = [item["total_edr_pairs_s"] for item in samples]
-                fairness = [item.get("fairness_index", 0.0) for item in samples]
+                edr_cvs = [item["edr_cv"] for item in samples]
                 mean_throughput = statistics.fmean(throughputs)
                 mean_edr = statistics.fmean(edrs)
                 rows.append({
@@ -226,8 +286,8 @@ def aggregate_measurements(measurements, args):
                     "mean_in_flight_pairs": statistics.fmean(
                         item["in_flight_pairs"] for item in samples
                     ),
-                    "mean_fairness_index": statistics.fmean(fairness),
-                    "fairness_std": statistics.pstdev(fairness),
+                    "mean_edr_cv": statistics.fmean(edr_cvs),
+                    "edr_cv_std": statistics.pstdev(edr_cvs),
                     "throughput_change_pct_vs_historical": percent_change(
                         mean_throughput, baseline_throughput
                     ),
@@ -239,7 +299,7 @@ def aggregate_measurements(measurements, args):
 
 
 def write_csv(rows, output_path, fields=CSV_FIELDS):
-    """Write aggregate experiment rows to a stable CSV schema."""
+    """Write experiment rows to a stable CSV schema."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="", encoding="utf-8") as stream:
@@ -252,11 +312,53 @@ def write_csv(rows, output_path, fields=CSV_FIELDS):
             })
 
 
+def raw_output_path(args):
+    """Return the explicit raw path or derive one beside the mean CSV."""
+    if args.raw_output:
+        return Path(args.raw_output)
+    output_path = Path(args.output)
+    return output_path.with_name(f"{output_path.stem}_raw{output_path.suffix}")
+
+
+def configure_sweep(args):
+    """Apply a targeted sweep preset without creating a large Cartesian grid."""
+    if args.sweep == "send-rate":
+        args.windows = tuple(range(1, 31))
+        args.attempts = None
+        args.send_max_try = 10
+        if args.output == DEFAULT_OUTPUT:
+            args.output = SEND_RATE_SWEEP_OUTPUT
+    elif args.sweep == "attempts":
+        args.windows = (30,)
+        args.attempts = tuple(range(1, 11))
+        if args.output == DEFAULT_OUTPUT:
+            args.output = ATTEMPT_SWEEP_OUTPUT
+    return args
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default="output/exp4/exp4.csv")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--raw-output",
+        help="per-seed CSV path (default: <output stem>_raw.csv)",
+    )
     parser.add_argument("--windows", type=parse_int_list, default=(5, 10, 15, 20, 25, 30))
-    parser.add_argument("--seeds", type=parse_int_list, default=(101, 202, 303))
+    parser.add_argument(
+        "--sweep",
+        choices=("custom", "send-rate", "attempts"),
+        default="custom",
+        help=(
+            "targeted sweep preset: send-rate uses w=1..30 at M=10; "
+            "attempts uses M=1..10 at w=30"
+        ),
+    )
+    parser.add_argument(
+        "--seeds",
+        type=parse_int_list,
+        default=DEFAULT_SEEDS,
+        help="comma-separated seeds (default: 1 through 50)",
+    )
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--accuracy", type=int, default=1000)
     parser.add_argument("--nodes", type=int, default=50)
@@ -277,8 +379,14 @@ def build_parser():
 
 
 def main():
-    args = build_parser().parse_args()
+    args = configure_sweep(build_parser().parse_args())
+    if len(set(args.seeds)) != len(args.seeds):
+        raise ValueError("--seeds must not contain duplicates")
     attempt_values = args.attempts or (args.send_max_try,)
+    raw_path = raw_output_path(args)
+    write_csv([], raw_path, RAW_CSV_FIELDS)
+    total_pairs = len(args.windows) * len(attempt_values) * len(args.seeds)
+    completed_pairs = 0
     measurements = []
     for window_size in args.windows:
         for send_max_try in attempt_values:
@@ -299,10 +407,21 @@ def main():
                     paired_requests.add(result["request_pairs"])
                 if len(paired_signatures) != 1 or len(paired_requests) != 1:
                     raise RuntimeError("paired algorithms did not receive identical scenarios")
+                completed_pairs += 1
+                write_csv(measurements, raw_path, RAW_CSV_FIELDS)
+                print(
+                    f"[{completed_pairs}/{total_pairs}] checkpointed "
+                    f"w={window_size}, M={send_max_try}, seed={seed}",
+                    flush=True,
+                )
 
     rows = aggregate_measurements(measurements, args)
     write_csv(rows, args.output)
-    print(f"Wrote {len(rows)} graph-ready rows to {args.output}")
+    print(f"Wrote {len(measurements)} per-seed rows to {raw_path}")
+    print(
+        f"Wrote {len(rows)} graph-ready mean rows averaged over "
+        f"{len(args.seeds)} seeds to {args.output}"
+    )
 
 
 if __name__ == "__main__":

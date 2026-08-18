@@ -17,7 +17,7 @@ scenarios:
 1. Total EDR versus sending rate/window size `w`.
 2. Total EDR versus maximum attempts `M`.
 3. Dropped qubits versus maximum attempts `M`.
-4. Jain resource-allocation fairness versus sending rate/window size `w`.
+4. EDR coefficient of variation versus sending rate/window size `w`.
 
 ## 2. Experimental design
 
@@ -107,21 +107,20 @@ The paired comparison experiment was extended in the following ways.
 | Added the `--attempts` comma-separated sweep argument | The original experiment varied only `w`, so it could not produce EDR-versus-`M` or drops-versus-`M` figures. |
 | Passed `send_max_try` into each simulation run | Each attempt-sweep point must configure its own maximum retry count instead of reusing one global value. |
 | Aggregated results by both `window_size` and `send_max_try` | This preserves the parameter identity of every plotted point and supports targeted or full-grid experiments. |
-| Added `jain_fairness()` | The requested resource-allocation fairness graph requires a bounded fairness metric computed from per-request completed allocations. |
-| Exported `mean_fairness_index` and `fairness_std` | The graphing stage needs the mean and across-seed spread without rerunning or reconstructing request-level data. |
+| Added `coefficient_of_variation()` | The paper measures fairness as the population standard deviation of per-request EDR divided by its mean. |
+| Exported `mean_edr_cv` and `edr_cv_std` | The graphing stage needs the mean CV and across-seed spread. Lower CV is fairer. |
 | Preserved paired topology/request validation | Algorithm differences should come from the congestion estimator, not from different random networks or request pairs. |
 | Preserved `--send-max-try 10` as the default | Existing commands and the manuscript's `M = 10` sending-rate experiment remain backward compatible. |
 
-Jain fairness is calculated for the completed allocations `x_i` of the five
-requests:
+The coefficient of variation is calculated for per-request EDR values `x_i`:
 
 ```text
-J = (sum(x_i))^2 / (n * sum(x_i^2))
+CV = population_std(x_i) / mean(x_i)
 ```
 
-It ranges from 0 to 1, with larger values indicating a more even allocation.
-An all-zero allocation is reported as 0 because no useful resource was
-allocated.
+Lower values indicate a more even EDR allocation. An all-zero allocation is
+reported as 0 because all requests have equal EDR; total EDR separately records
+that no useful distribution occurred.
 
 ### 4.2 `plot_comparison.py`
 
@@ -150,7 +149,7 @@ standard deviations, and `--error-bars` can display them.
 
 | File | Modification and reason |
 | --- | --- |
-| `test_exp4.py` | Added Jain fairness checks and confirmed the expanded CSV schema remains stable. |
+| `test_exp4.py` | Added coefficient-of-variation checks and confirmed the expanded CSV schema remains stable. |
 | `test_plot_comparison.py` | Added CSV parsing, two-version slice, format parsing, variation, and multi-file deduplication tests. |
 | `GRAPHING_INSTRUCTIONS.md` | Added complete copy-paste instructions for environment setup, both sweeps, plotting, validation, and troubleshooting. |
 | `README.md` | Linked the complete graph guide and summarized the attempt sweep, fairness export, and IEEE output behavior. |
@@ -190,8 +189,7 @@ Across all 30 sending rates:
 - Real-time mean total EDR: 508.068 qubits/s.
 - Historical mean dropped qubits: 1458.989.
 - Real-time mean dropped qubits: 1106.844.
-- Historical mean Jain fairness: 0.8660.
-- Real-time mean Jain fairness: 0.8678.
+- CV was not retained in the legacy three-seed aggregate; rerun the sending-rate sweep with the current schema to report it.
 - Historical peak EDR: 559.500 qubits/s at `w = 16`.
 - Real-time peak EDR: 583.600 qubits/s at `w = 12`.
 
@@ -266,11 +264,8 @@ not demonstrate a large systematic fairness improvement.
   requested graph notation; in the simulator this quantity is completed
   entangled pairs per second.
 - Dropped-qubit values are mean counts per 10 s simulation, not rates.
-- The fairness index measures equality of completed allocations, not fairness of
-  memory occupancy, waiting time, or route access.
-- The original paper reports fairness using coefficient of variation (CV), where
-  lower is fairer. This extension uses Jain's index, where higher is fairer, so
-  the numerical curves should not be compared directly.
+- CV measures dispersion of completed per-request EDR, not fairness of memory
+  occupancy, waiting time, or route access. Lower CV is fairer.
 
 ## 10. Reproduction
 
