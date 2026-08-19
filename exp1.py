@@ -16,10 +16,6 @@ OUTPUT = Path("output/exp1/exp2-7.1.csv")
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 f = open(OUTPUT, "w", buffering=1)
 
-
-
-
-
 def coefficient_of_variation(data, ddof=0):
     """
     Calculate the coefficient of variation.
