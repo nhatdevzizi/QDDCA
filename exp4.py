@@ -22,7 +22,7 @@ ALGORITHMS = (
 # still sampling fifty independently generated topology/request scenarios.
 DEFAULT_SEEDS = tuple(range(1, 51))
 DEFAULT_OUTPUT = "output/exp4/exp4.csv"
-SEND_RATE_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
+WINDOW_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
 ATTEMPT_SWEEP_OUTPUT = "output/exp4/exp4_attempt_sweep.csv"
 
 CSV_FIELDS = (
@@ -322,12 +322,12 @@ def raw_output_path(args):
 
 def configure_sweep(args):
     """Apply a targeted sweep preset without creating a large Cartesian grid."""
-    if args.sweep == "send-rate":
+    if args.sweep in ("window-size", "send-rate"):
         args.windows = tuple(range(1, 31))
         args.attempts = None
         args.send_max_try = 10
         if args.output == DEFAULT_OUTPUT:
-            args.output = SEND_RATE_SWEEP_OUTPUT
+            args.output = WINDOW_SWEEP_OUTPUT
     elif args.sweep == "attempts":
         args.windows = (30,)
         args.attempts = tuple(range(1, 11))
@@ -346,11 +346,12 @@ def build_parser():
     parser.add_argument("--windows", type=parse_int_list, default=(5, 10, 15, 20, 25, 30))
     parser.add_argument(
         "--sweep",
-        choices=("custom", "send-rate", "attempts"),
+        choices=("custom", "window-size", "send-rate", "attempts"),
         default="custom",
         help=(
-            "targeted sweep preset: send-rate uses w=1..30 at M=10; "
-            "attempts uses M=1..10 at w=30"
+            "targeted sweep preset: window-size uses w=1..30 at M=10; "
+            "attempts uses M=1..10 at w=30; send-rate is a legacy alias "
+            "for window-size"
         ),
     )
     parser.add_argument(

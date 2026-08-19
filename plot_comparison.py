@@ -243,7 +243,7 @@ def build_parser():
     parser.add_argument(
         "--fixed-attempts",
         type=int,
-        help="attempt count used in send-rate graphs (default: largest in CSV)",
+        help="attempt count used in window-size graphs (default: largest in CSV)",
     )
     parser.add_argument(
         "--formats",
@@ -280,7 +280,7 @@ def main():
     rows = read_result_files(args.input)
     fixed_window = args.fixed_window or max(row["window_size"] for row in rows)
     fixed_attempts = args.fixed_attempts or max(row["send_max_try"] for row in rows)
-    by_send_rate = select_rows(rows, send_max_try=fixed_attempts)
+    by_window_size = select_rows(rows, send_max_try=fixed_attempts)
     by_attempts = select_rows(rows, window_size=fixed_window)
 
     output_dir = Path(args.output_dir)
@@ -291,13 +291,13 @@ def main():
     width = 3.5 if args.column_width == "single" else 7.16
     graph_specs = [
         (
-            by_send_rate,
+            by_window_size,
             "window_size",
             "total_edr_pairs_s",
-            r"Sending rate, $w$",
+            r"Sending window size, $w$",
             "Total EDR (qubits/s)",
-            rf"Total EDR vs. Sending Rate ($M={fixed_attempts}$)",
-            "01_edr_vs_send_rate",
+            rf"Total EDR vs. Sending Window Size ($M={fixed_attempts}$)",
+            "01_edr_vs_window",
             "edr_std_pairs_s",
         ),
         (
@@ -322,21 +322,21 @@ def main():
         ),
     ]
     cv_fields = {"mean_edr_cv", "edr_cv_std"}
-    if all(cv_fields <= set(row) for row in by_send_rate):
+    if all(cv_fields <= set(row) for row in by_window_size):
         graph_specs.append((
-            by_send_rate,
+            by_window_size,
             "window_size",
             "mean_edr_cv",
-            r"Sending rate, $w$",
+            r"Sending window size, $w$",
             "Coefficient of variation (CV)",
-            rf"EDR Fairness vs. Sending Rate ($M={fixed_attempts}$)",
-            "04_fairness_vs_send_rate",
+            rf"EDR Fairness vs. Sending Window Size ($M={fixed_attempts}$)",
+            "04_fairness_vs_window",
             "edr_cv_std",
         ))
     else:
         message = (
-            "Skipping 04_fairness_vs_send_rate: aggregate input lacks "
-            "mean_edr_cv and edr_cv_std; rerun the sending-rate sweep"
+            "Skipping 04_fairness_vs_window: aggregate input lacks "
+            "mean_edr_cv and edr_cv_std; rerun the window-size sweep"
         )
         if args.strict:
             raise ValueError(message)

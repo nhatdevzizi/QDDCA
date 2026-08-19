@@ -106,22 +106,23 @@ along with all simulation parameters needed to reproduce the sweep. The optional
 coefficient of variation of per-request EDR: population standard deviation
 divided by mean EDR, where lower values indicate fairer allocation.
 
-Use `--sweep send-rate` for the targeted `w=1..30, M=10` run and `--sweep
+Use `--sweep window-size` for the targeted `w=1..30, M=10` run and `--sweep
 attempts` for the targeted `w=30, M=1..10` run. These presets select distinct
 output filenames, print paired-scenario progress, and checkpoint the raw CSV
 after every seed. Custom `--windows` and `--attempts` values remain available
-with the default `--sweep custom` mode.
+with the default `--sweep custom` mode. The former `--sweep send-rate` spelling
+remains available as a backward-compatible alias for `window-size`.
 
 `plot_comparison.py` writes IEEE single-column vector PDF and 600-dpi PNG
 figures to `output/exp4/plot/`:
 
-1. EDR versus send rate/window size (`w`)
+1. EDR versus sending window size (`w`)
 2. EDR versus maximum attempts (`M`)
 3. Dropped qubits versus EDR
 4. Dropped qubits versus maximum attempts (`M`)
-5. EDR coefficient of variation versus send rate/window size (`w`)
+5. EDR coefficient of variation versus sending window size (`w`)
 
-The send-rate figures use the largest `M` in the CSV by default, and the
+The window-size figures use the largest `M` in the CSV by default, and the
 attempt-based figures use the largest `w`. Use `--fixed-attempts` and
 `--fixed-window` to select different slices. Multiple CSVs can be merged at
 plot time, for example:

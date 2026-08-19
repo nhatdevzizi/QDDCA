@@ -86,7 +86,14 @@ class MeasurementExportTests(unittest.TestCase):
             Path("output/exp4/exp4_attempt_sweep_raw.csv"),
         )
 
-    def test_send_rate_sweep_preset(self):
+    def test_window_size_sweep_preset(self):
+        args = configure_sweep(build_parser().parse_args(["--sweep", "window-size"]))
+        self.assertEqual(args.windows, tuple(range(1, 31)))
+        self.assertIsNone(args.attempts)
+        self.assertEqual(args.send_max_try, 10)
+        self.assertEqual(args.output, "output/exp4/exp4_window_sweep.csv")
+
+    def test_send_rate_remains_a_legacy_alias(self):
         args = configure_sweep(build_parser().parse_args(["--sweep", "send-rate"]))
         self.assertEqual(args.windows, tuple(range(1, 31)))
         self.assertIsNone(args.attempts)
