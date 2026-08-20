@@ -3,17 +3,20 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from exp4 import (
     CSV_FIELDS,
     DEFAULT_SEEDS,
     RAW_CSV_FIELDS,
     aggregate_measurements,
+    build_cases,
     build_parser,
     coefficient_of_variation,
     configure_sweep,
     parse_int_list,
     raw_output_path,
+    run_case,
     write_csv,
 )
 
@@ -58,6 +61,36 @@ class MeasurementExportTests(unittest.TestCase):
 
     def test_parse_int_list(self):
         self.assertEqual(parse_int_list("5, 10,15"), (5, 10, 15))
+
+    def test_build_cases_matches_the_shared_nested_sweep_pattern(self):
+        self.args.windows = (10, 20)
+        self.args.attempts = (1, 5)
+
+        self.assertEqual(
+            tuple(build_cases(self.args)),
+            (
+                (10, 1, 1),
+                (10, 1, 2),
+                (10, 5, 1),
+                (10, 5, 2),
+                (20, 1, 1),
+                (20, 1, 2),
+                (20, 5, 1),
+                (20, 5, 2),
+            ),
+        )
+
+    @patch("exp4.run_simulation")
+    def test_run_case_executes_a_paired_identical_scenario(self, run_simulation):
+        run_simulation.side_effect = [
+            {"topology_signature": "abc", "request_pairs": "n1->n2"},
+            {"topology_signature": "abc", "request_pairs": "n1->n2"},
+        ]
+
+        results = run_case(self.args, 10, 5, 1)
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(run_simulation.call_count, 2)
 
     def test_coefficient_of_variation(self):
         self.assertEqual(coefficient_of_variation([10, 10, 10]), 0.0)

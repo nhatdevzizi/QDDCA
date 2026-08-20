@@ -20,7 +20,7 @@ ALGORITHMS = (
 
 # Fifty deterministic seeds make the default experiment reproducible while
 # still sampling fifty independently generated topology/request scenarios.
-DEFAULT_SEEDS = tuple(range(1, 51))
+DEFAULT_SEEDS = tuple(range(1, 11))
 DEFAULT_OUTPUT = "output/exp4/exp4.csv"
 WINDOW_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
 ATTEMPT_SWEEP_OUTPUT = "output/exp4/exp4_attempt_sweep.csv"
@@ -136,6 +136,32 @@ def signal_gap_snapshot(network):
     return gaps
 
 
+def collect_metrics(network, args):
+    """Collect the per-request delivery metrics shared by every case."""
+    completed_by_request = [len(source.sendedList) for source in network.s]
+    completed = sum(completed_by_request)
+    per_request_throughput = [count / args.duration for count in completed_by_request]
+    signal_gaps = signal_gap_snapshot(network)
+
+    return {
+        "mean_request_throughput_pairs_s": statistics.fmean(per_request_throughput),
+        "total_edr_pairs_s": completed / args.duration,
+        "completed_pairs": completed,
+        "dropped_pairs": sum(len(source.dropList) for source in network.s),
+        "in_flight_pairs": sum(len(source.sendingList) for source in network.s),
+        "request_edrs_pairs_s": ";".join(
+            f"{throughput:.6f}" for throughput in per_request_throughput
+        ),
+        "edr_cv": coefficient_of_variation(per_request_throughput),
+        "mean_signal_gap": statistics.fmean(signal_gaps) if signal_gaps else 0.0,
+        "mean_abs_signal_gap": (
+            statistics.fmean(abs(gap) for gap in signal_gaps)
+            if signal_gaps
+            else 0.0
+        ),
+    }
+
+
 def run_simulation(args, seed, window_size, send_max_try, algorithm, history_weight,
                    epsilon=0.5):
     """Run one simulation replicate and return its raw measurements."""
@@ -170,14 +196,7 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
     )
     simulator.run()
 
-    completed_by_request = [len(source.sendedList) for source in network.s]
-    completed = sum(completed_by_request)
-    dropped = sum(len(source.dropList) for source in network.s)
-    in_flight = sum(len(source.sendingList) for source in network.s)
-    per_request_throughput = [count / args.duration for count in completed_by_request]
-    signal_gaps = signal_gap_snapshot(network)
-
-    return {
+    result = {
         "seed": seed,
         "window_size": window_size,
         "send_max_try": send_max_try,
@@ -194,20 +213,40 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
         "algorithm": algorithm,
         "congestion_history_weight": history_weight,
         "smoothing_epsilon": epsilon,
-        "mean_request_throughput_pairs_s": statistics.fmean(per_request_throughput),
-        "total_edr_pairs_s": completed / args.duration,
-        "completed_pairs": completed,
-        "dropped_pairs": dropped,
-        "in_flight_pairs": in_flight,
-        "request_edrs_pairs_s": ";".join(
-            f"{throughput:.6f}" for throughput in per_request_throughput
-        ),
-        "edr_cv": coefficient_of_variation(per_request_throughput),
         "topology_signature": signature,
         "request_pairs": request_pairs,
-        "mean_signal_gap": statistics.fmean(signal_gaps) if signal_gaps else 0.0,
-        "mean_abs_signal_gap": statistics.fmean(abs(gap) for gap in signal_gaps) if signal_gaps else 0.0,
     }
+    result.update(collect_metrics(network, args))
+    return result
+
+
+def build_cases(args):
+    """Yield every reproducible ``(window, attempts, seed)`` case."""
+    attempt_values = args.attempts or (args.send_max_try,)
+    for window_size in args.windows:
+        for send_max_try in attempt_values:
+            for seed in args.seeds:
+                yield window_size, send_max_try, seed
+
+
+def run_case(args, window_size, send_max_try, seed):
+    """Run both algorithms on one identical seeded network scenario."""
+    results = [
+        run_simulation(
+            args,
+            seed,
+            window_size,
+            send_max_try,
+            algorithm,
+            history_weight,
+        )
+        for algorithm, history_weight in ALGORITHMS
+    ]
+    if len({result["topology_signature"] for result in results}) != 1:
+        raise RuntimeError("paired algorithms did not receive identical topologies")
+    if len({result["request_pairs"] for result in results}) != 1:
+        raise RuntimeError("paired algorithms did not receive identical request pairs")
+    return results
 
 
 def percent_change(value, baseline):
@@ -306,10 +345,15 @@ def write_csv(rows, output_path, fields=CSV_FIELDS):
         writer = csv.DictWriter(stream, fieldnames=fields)
         writer.writeheader()
         for row in rows:
-            writer.writerow({
-                key: f"{value:.6f}" if isinstance(value, float) else value
-                for key, value in row.items()
-            })
+            write_result(writer, row)
+
+
+def write_result(writer, row):
+    """Write one result using the stable numeric formatting of the CSV files."""
+    writer.writerow({
+        key: f"{value:.6f}" if isinstance(value, float) else value
+        for key, value in row.items()
+    })
 
 
 def raw_output_path(args):
@@ -383,38 +427,24 @@ def main():
     args = configure_sweep(build_parser().parse_args())
     if len(set(args.seeds)) != len(args.seeds):
         raise ValueError("--seeds must not contain duplicates")
-    attempt_values = args.attempts or (args.send_max_try,)
+    cases = tuple(build_cases(args))
     raw_path = raw_output_path(args)
-    write_csv([], raw_path, RAW_CSV_FIELDS)
-    total_pairs = len(args.windows) * len(attempt_values) * len(args.seeds)
-    completed_pairs = 0
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
     measurements = []
-    for window_size in args.windows:
-        for send_max_try in attempt_values:
-            for seed in args.seeds:
-                paired_signatures = set()
-                paired_requests = set()
-                for algorithm, history_weight in ALGORITHMS:
-                    result = run_simulation(
-                        args,
-                        seed,
-                        window_size,
-                        send_max_try,
-                        algorithm,
-                        history_weight,
-                    )
-                    measurements.append(result)
-                    paired_signatures.add(result["topology_signature"])
-                    paired_requests.add(result["request_pairs"])
-                if len(paired_signatures) != 1 or len(paired_requests) != 1:
-                    raise RuntimeError("paired algorithms did not receive identical scenarios")
-                completed_pairs += 1
-                write_csv(measurements, raw_path, RAW_CSV_FIELDS)
-                print(
-                    f"[{completed_pairs}/{total_pairs}] checkpointed "
-                    f"w={window_size}, M={send_max_try}, seed={seed}",
-                    flush=True,
-                )
+    with raw_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=RAW_CSV_FIELDS)
+        writer.writeheader()
+        for case_number, (window_size, send_max_try, seed) in enumerate(cases, 1):
+            results = run_case(args, window_size, send_max_try, seed)
+            measurements.extend(results)
+            for result in results:
+                write_result(writer, result)
+            stream.flush()
+            print(
+                f"[{case_number}/{len(cases)}] checkpointed "
+                f"w={window_size}, M={send_max_try}, seed={seed}",
+                flush=True,
+            )
 
     rows = aggregate_measurements(measurements, args)
     write_csv(rows, args.output)

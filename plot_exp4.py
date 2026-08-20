@@ -1,9 +1,10 @@
 """Draw four IEEE-ready historical-versus-real-time Q-DDCA graphs.
 
-Generate the input with an attempt sweep first, for example::
+Generate both targeted sweeps first, then run this script::
 
-    python exp4.py --attempts 1,2,3,4,5,6,7,8,9,10
-    python plot_comparison.py
+    python exp4.py --sweep attempts
+    python exp4.py --sweep window-size
+    python plot_exp4.py
 """
 
 import argparse
@@ -41,6 +42,10 @@ OPTIONAL_NUMERIC_FIELDS = {
     "mean_edr_cv": float,
     "edr_cv_std": float,
 }
+DEFAULT_INPUTS = (
+    "output/exp4/exp4_attempt_sweep.csv",
+    "output/exp4/exp4_window_sweep.csv",
+)
 
 
 def read_results(path):
@@ -77,12 +82,16 @@ def read_results(path):
 
 
 def read_result_files(paths):
-    """Merge result CSVs, with later files replacing duplicate parameter rows."""
+    """Merge result CSVs while retaining the richest duplicate row schema."""
     merged = {}
     for path in paths:
         for row in read_results(path):
             key = (row["window_size"], row["send_max_try"], row["algorithm"])
-            merged[key] = row
+            existing = merged.get(key)
+            if existing is None or (
+                "mean_edr_cv" in row and "mean_edr_cv" not in existing
+            ):
+                merged[key] = row
     return list(merged.values())
 
 
@@ -231,8 +240,11 @@ def build_parser():
     parser.add_argument(
         "--input",
         nargs="+",
-        default=("output/exp4/exp4.csv",),
-        help="one or more aggregated exp4 CSV files to merge for plotting",
+        default=DEFAULT_INPUTS,
+        help=(
+            "one or more aggregated exp4 CSV files to merge for plotting "
+            "(default: the attempt sweep and window-size sweep)"
+        ),
     )
     parser.add_argument("--output-dir", default="output/exp4/plot")
     parser.add_argument(

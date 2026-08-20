@@ -87,7 +87,8 @@ Run a paired baseline-versus-improved sweep and create graph-ready results:
 
 ```bash
 python exp4.py --sweep attempts
-python plot_comparison.py
+python exp4.py --sweep window-size
+python plot_exp4.py
 ```
 
 The default experiment uses the 50 reproducible seeds `1` through `50`. It
@@ -113,14 +114,13 @@ after every seed. Custom `--windows` and `--attempts` values remain available
 with the default `--sweep custom` mode. The former `--sweep send-rate` spelling
 remains available as a backward-compatible alias for `window-size`.
 
-`plot_comparison.py` writes IEEE single-column vector PDF and 600-dpi PNG
+`plot_exp4.py` writes IEEE single-column vector PDF and 600-dpi PNG
 figures to `output/exp4/plot/`:
 
 1. EDR versus sending window size (`w`)
 2. EDR versus maximum attempts (`M`)
-3. Dropped qubits versus EDR
-4. Dropped qubits versus maximum attempts (`M`)
-5. EDR coefficient of variation versus sending window size (`w`)
+3. Dropped qubits versus maximum attempts (`M`)
+4. EDR coefficient of variation versus sending window size (`w`)
 
 The window-size figures use the largest `M` in the CSV by default, and the
 attempt-based figures use the largest `w`. Use `--fixed-attempts` and
@@ -128,7 +128,7 @@ attempt-based figures use the largest `w`. Use `--fixed-attempts` and
 plot time, for example:
 
 ```bash
-python plot_comparison.py --input output/exp4/exp4.csv output/exp4/exp4_attempt_sweep.csv
+python plot_exp4.py --input output/exp4/exp4_attempt_sweep.csv output/exp4/exp4_window_sweep.csv
 ```
 
 The default style matches the supplied IEEE manuscript: Times-family text,
@@ -139,8 +139,8 @@ needed. A graph is skipped when its CSV data has fewer than two distinct x-axis
 values, avoiding misleading single-point attempt plots. Plotting requires
 Matplotlib.
 
-Pass only the aggregate CSV to `plot_comparison.py`; the `*_raw.csv` file is an
-audit artifact containing one row per seed and algorithm. A custom `--output`
+Pass only aggregate CSVs to `plot_exp4.py`; the `*_raw.csv` files are
+audit artifacts containing one row per seed and algorithm. A custom `--output`
 automatically derives a neighboring `<stem>_raw.csv` path, or `--raw-output`
 can set it explicitly.
 

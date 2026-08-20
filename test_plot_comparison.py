@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from plot_comparison import (
+from plot_exp4 import (
+    DEFAULT_INPUTS,
     build_parser,
     has_x_variation,
     parse_formats,
@@ -64,11 +65,8 @@ class PlotComparisonTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertNotIn("mean_edr_cv", rows[0])
 
-    def test_default_input_is_aggregate_output(self):
-        self.assertEqual(
-            build_parser().parse_args([]).input,
-            ("output/exp4/exp4.csv",),
-        )
+    def test_default_inputs_cover_both_targeted_sweeps(self):
+        self.assertEqual(build_parser().parse_args([]).input, DEFAULT_INPUTS)
 
     def test_multiple_csvs_are_deduplicated(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -79,6 +77,19 @@ class PlotComparisonTests(unittest.TestCase):
             rows = read_result_files((first, second))
 
         self.assertEqual(len(rows), 2)
+
+    def test_duplicate_merge_keeps_cv_schema_regardless_of_input_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            rich = directory / "window.csv"
+            legacy = directory / "attempt.csv"
+            self.write_csv(rich, include_cv=True)
+            self.write_csv(legacy, include_cv=False)
+
+            rows = read_result_files((rich, legacy))
+
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all("mean_edr_cv" in row for row in rows))
 
     def test_select_rejects_missing_slice(self):
         with self.assertRaisesRegex(ValueError, "no complete two-version data"):
