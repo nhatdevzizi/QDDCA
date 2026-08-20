@@ -19,6 +19,7 @@ everything here with an epsilon PlotSpec.
 
 import argparse
 import csv
+import math
 from collections import namedtuple
 from pathlib import Path
 
@@ -27,8 +28,7 @@ COLUMN_WIDTH = 3.5  # inches — IEEE single column (88 mm)
 HISTORICAL = "#000000"
 REALTIME = "#b8860b"  # darkgoldenrod; clears 3:1 on white, unlike plain goldenrod
 GAP_FILL = "#d9d9d9"
-MARKER_SPACING = 0.1  # draw a marker every 0.1, however fine the grid is
-TICK_MAJOR = 0.1      # labelled tick spacing; --tick-major overrides
+TICK_MAJOR = None     # labelled tick spacing; None derives one from the range
 TICK_MINOR = None     # unlabelled tick spacing; None follows the CSV's own step
 
 
@@ -85,9 +85,28 @@ def grid_step(values):
     return values[1] - values[0] if len(values) > 1 else 0.1
 
 
+def nice_step(span, target=10):
+    """Round span/target up to a 1-2-5 style number so tick labels stay readable.
+
+    A sweep over [0, 1] lands on 0.1 and one over [0.1, 10] lands on 1, so the
+    axis carries about ten labels whatever the parameter's range happens to be.
+    """
+    raw = span / target
+    magnitude = 10 ** math.floor(math.log10(raw))
+    for multiple in (1, 2, 2.5, 5):
+        if raw <= multiple * magnitude:
+            return multiple * magnitude
+    return 10 * magnitude
+
+
+def major_step(values):
+    """Labelled tick spacing: the override if given, otherwise derived."""
+    return TICK_MAJOR or nice_step(values[-1] - values[0])
+
+
 def marker_every(values):
     """Thin markers so a fine grid does not turn the line into a solid band."""
-    return max(1, round(MARKER_SPACING / grid_step(values)))
+    return max(1, round(major_step(values) / grid_step(values)))
 
 
 def set_param_axis(axes, values):
@@ -101,7 +120,7 @@ def set_param_axis(axes, values):
 
     span = values[-1] - values[0]
     axes.set_xlim(values[0] - 0.02 * span, values[-1] + 0.02 * span)
-    axes.xaxis.set_major_locator(MultipleLocator(TICK_MAJOR))
+    axes.xaxis.set_major_locator(MultipleLocator(major_step(values)))
     axes.xaxis.set_minor_locator(MultipleLocator(TICK_MINOR or grid_step(values)))
     axes.yaxis.set_minor_locator(AutoMinorLocator(2))
 
@@ -276,7 +295,12 @@ def demo(spec=ALPHA):
     assert to_float("1.5") == 1.5
     assert to_float("-575.000000") == -575.0
     assert abs(grid_step([0.0, 0.02, 0.04]) - 0.02) < 1e-12
-    assert marker_every([0.0, 0.02, 0.04]) == 5
+    # A [0, 1] sweep keeps the historical 0.1 tick; [0.1, 10] widens to 1.
+    assert abs(nice_step(1.0) - 0.1) < 1e-12
+    assert abs(nice_step(9.9) - 1.0) < 1e-12
+    assert abs(nice_step(0.5) - 0.05) < 1e-12
+    assert marker_every([round(i * 0.02, 4) for i in range(51)]) == 5
+    assert marker_every([round(0.1 + i * 0.1, 4) for i in range(100)]) == 10
 
     rows = [{spec.column: "0.000000", "total_edr_pairs_s": "10"},
             {spec.column: f"{spec.baseline:.6f}", "total_edr_pairs_s": "8"}]
@@ -294,8 +318,8 @@ def run_cli(spec, default_input, default_outdir, default_stem):
     parser.add_argument("--stem", default=default_stem)
     parser.add_argument("--formats", default="pdf,png",
                         help="comma-separated extensions, e.g. pdf,png,eps")
-    parser.add_argument("--tick-major", type=float, default=TICK_MAJOR,
-                        help="labelled tick spacing on the parameter axis (default %(default)s)")
+    parser.add_argument("--tick-major", type=float, default=None,
+                        help="labelled tick spacing; default derives one from the range")
     parser.add_argument("--tick-minor", type=float, default=None,
                         help="unlabelled tick spacing; default follows the CSV's own step")
     parser.add_argument("--self-check", action="store_true", help="run assertions and exit")
@@ -306,8 +330,8 @@ def run_cli(spec, default_input, default_outdir, default_stem):
         return
 
     for name, value in (("--tick-major", args.tick_major), ("--tick-minor", args.tick_minor)):
-        if value is not None and not 0 < value <= 1:
-            parser.error(f"{name} must be within (0, 1]")
+        if value is not None and value <= 0:
+            parser.error(f"{name} must be positive")
 
     TICK_MAJOR = args.tick_major
     TICK_MINOR = args.tick_minor

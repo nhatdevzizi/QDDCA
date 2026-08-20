@@ -46,15 +46,29 @@ RAW_FIELDS = (
 )
 
 
-def parse_float_list(value):
-    """Parse a comma-separated list of alphas, each within [0, 1]."""
-    values = tuple(round(float(item.strip()), 4) for item in value.split(",") if item.strip())
-    if not values:
-        raise argparse.ArgumentTypeError("expected at least one float")
-    for alpha in values:
-        if not 0.0 <= alpha <= 1.0:
-            raise argparse.ArgumentTypeError(f"alpha {alpha} outside [0, 1]")
-    return values
+def float_list(minimum=0.0, maximum=None):
+    """Build an argparse type for a comma-separated, bounded list of floats.
+
+    Alpha is a weight and stops at 1; epsilon is a smoothing constant with no
+    upper bound, so the ceiling is optional.
+    """
+    def parse(value):
+        values = tuple(round(float(item.strip()), 4)
+                       for item in value.split(",") if item.strip())
+        if not values:
+            raise argparse.ArgumentTypeError("expected at least one float")
+        for item in values:
+            if item < minimum or (maximum is not None and item > maximum):
+                bound = f"[{minimum:g}, {maximum:g}]" if maximum is not None else f">= {minimum:g}"
+                raise argparse.ArgumentTypeError(f"{item:g} outside {bound}")
+        return values
+    return parse
+
+
+def float_grid(start, stop, step):
+    """Inclusive grid built from integer counts, so no float drift accumulates."""
+    count = int(round((stop - start) / step))
+    return tuple(round(start + index * step, 4) for index in range(count + 1))
 
 
 def csv_fields(spec, extra_names=()):
@@ -203,7 +217,7 @@ def demo():
 
 def main():
     parser = build_parser()
-    parser.add_argument("--alphas", type=parse_float_list, default=None,
+    parser.add_argument("--alphas", type=float_list(0.0, 1.0), default=None,
                         help="explicit alpha list; overrides --alpha-step")
     parser.add_argument("--alpha-step", type=float, default=0.02,
                         help="alpha grid spacing over [0, 1]")
@@ -218,8 +232,7 @@ def main():
     if args.alphas is None:
         if not 0.0 < args.alpha_step <= 1.0:
             parser.error("--alpha-step must be within (0, 1]")
-        steps = int(round(1.0 / args.alpha_step))
-        args.alphas = tuple(round(i / steps, 4) for i in range(steps + 1))
+        args.alphas = float_grid(0.0, 1.0, args.alpha_step)
 
     window_size = args.windows[0]
     measurements = []

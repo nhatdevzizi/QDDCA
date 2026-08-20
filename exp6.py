@@ -17,7 +17,7 @@ alpha = 0 epsilon has no effect whatsoever.
 import argparse
 
 from exp4 import build_parser, run_simulation
-from exp5 import (SweepSpec, aggregate_sweep, csv_fields, parse_float_list,
+from exp5 import (SweepSpec, aggregate_sweep, csv_fields, float_grid, float_list,
                   print_table, write_sweep)
 
 
@@ -65,10 +65,14 @@ def demo():
 
 def main():
     parser = build_parser()
-    parser.add_argument("--epsilons", type=parse_float_list, default=None,
-                        help="explicit epsilon list; overrides --epsilon-step")
-    parser.add_argument("--epsilon-step", type=float, default=0.05,
-                        help="epsilon grid spacing over [0, 1]")
+    parser.add_argument("--epsilons", type=float_list(0.0), default=None,
+                        help="explicit epsilon list; overrides the grid flags")
+    parser.add_argument("--epsilon-min", type=float, default=0.1,
+                        help="first epsilon on the grid (default %(default)s)")
+    parser.add_argument("--epsilon-max", type=float, default=10.0,
+                        help="last epsilon on the grid (default %(default)s)")
+    parser.add_argument("--epsilon-step", type=float, default=0.1,
+                        help="epsilon grid spacing (default %(default)s)")
     parser.add_argument("--history-weight", type=float, default=1.0,
                         help="alpha held fixed for the sweep; epsilon is inert at alpha=0")
     parser.add_argument("--self-check", action="store_true", help="run assertions and exit")
@@ -85,10 +89,15 @@ def main():
         parser.error("--history-weight 0 makes epsilon inert: q_history is weighted out")
 
     if args.epsilons is None:
-        if not 0.0 < args.epsilon_step <= 1.0:
-            parser.error("--epsilon-step must be within (0, 1]")
-        steps = int(round(1.0 / args.epsilon_step))
-        args.epsilons = tuple(round(i / steps, 4) for i in range(steps + 1))
+        if args.epsilon_step <= 0.0:
+            parser.error("--epsilon-step must be positive")
+        if args.epsilon_min < 0.0 or args.epsilon_max <= args.epsilon_min:
+            parser.error("need 0 <= --epsilon-min < --epsilon-max")
+        args.epsilons = float_grid(args.epsilon_min, args.epsilon_max, args.epsilon_step)
+
+    if EPSILON.baseline not in args.epsilons:
+        parser.error(f"the grid must contain the baseline epsilon {EPSILON.baseline:g}; "
+                     "the sweep is reported relative to it")
 
     window_size = args.windows[0]
     measurements = []
