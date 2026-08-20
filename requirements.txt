@@ -1,0 +1,8 @@
+# Quantum network simulator used by the experiments
+qns
+
+# Numerical operations used by the simulator and experiment scripts
+numpy
+
+# Plotting scripts (plot_exp*.py and plot_exp4.py)
+matplotlib
