@@ -6,15 +6,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from exp4 import (
+    ATTEMPT_SWEEP_OUTPUT,
     CSV_FIELDS,
     DEFAULT_SEEDS,
     RAW_CSV_FIELDS,
+    WINDOW_SWEEP_OUTPUT,
     aggregate_measurements,
     build_cases,
     build_parser,
     coefficient_of_variation,
     configure_sweep,
-    parse_int_list,
     raw_output_path,
     run_case,
     write_csv,
@@ -59,9 +60,6 @@ class MeasurementExportTests(unittest.TestCase):
             "edr_cv": edr_cv,
         }
 
-    def test_parse_int_list(self):
-        self.assertEqual(parse_int_list("5, 10,15"), (5, 10, 15))
-
     def test_build_cases_matches_the_shared_nested_sweep_pattern(self):
         self.args.windows = (10, 20)
         self.args.attempts = (1, 5)
@@ -97,12 +95,15 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertAlmostEqual(coefficient_of_variation([10, 0]), 1.0)
         self.assertEqual(coefficient_of_variation([0, 0]), 0.0)
 
-    def test_default_output_matches_project_experiment_template(self):
-        args = build_parser().parse_args([])
-        self.assertEqual(args.output, "output/exp4/exp4.csv")
+    def test_default_uses_fixed_seeds_and_window_output(self):
+        args = configure_sweep(build_parser().parse_args([]))
+        self.assertEqual(args.output, WINDOW_SWEEP_OUTPUT)
         self.assertEqual(args.seeds, DEFAULT_SEEDS)
-        self.assertEqual(len(args.seeds), 50)
-        self.assertEqual(raw_output_path(args), Path("output/exp4/exp4_raw.csv"))
+        self.assertEqual(args.seeds, (101, 202, 303))
+        self.assertEqual(
+            raw_output_path(args),
+            Path("output/exp4/exp4_window_sweep_raw.csv"),
+        )
 
     def test_explicit_raw_output_is_preserved(self):
         args = build_parser().parse_args(["--raw-output", "output/custom.csv"])
@@ -113,7 +114,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(args.windows, (30,))
         self.assertEqual(args.attempts, tuple(range(1, 11)))
         self.assertEqual(args.seeds, DEFAULT_SEEDS)
-        self.assertEqual(args.output, "output/exp4/exp4_attempt_sweep.csv")
+        self.assertEqual(args.output, ATTEMPT_SWEEP_OUTPUT)
         self.assertEqual(
             raw_output_path(args),
             Path("output/exp4/exp4_attempt_sweep_raw.csv"),
@@ -124,14 +125,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(args.windows, tuple(range(1, 31)))
         self.assertIsNone(args.attempts)
         self.assertEqual(args.send_max_try, 10)
-        self.assertEqual(args.output, "output/exp4/exp4_window_sweep.csv")
-
-    def test_send_rate_remains_a_legacy_alias(self):
-        args = configure_sweep(build_parser().parse_args(["--sweep", "send-rate"]))
-        self.assertEqual(args.windows, tuple(range(1, 31)))
-        self.assertIsNone(args.attempts)
-        self.assertEqual(args.send_max_try, 10)
-        self.assertEqual(args.output, "output/exp4/exp4_window_sweep.csv")
+        self.assertEqual(args.output, WINDOW_SWEEP_OUTPUT)
 
     def test_sweep_preset_preserves_explicit_output(self):
         args = configure_sweep(build_parser().parse_args([
@@ -148,6 +142,10 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertAlmostEqual(improved["total_edr_pairs_s"], 26.0)
         self.assertAlmostEqual(improved["throughput_change_pct_vs_historical"], 100 * 2 / 11)
         self.assertAlmostEqual(improved["edr_change_pct_vs_historical"], 100 * 4 / 22)
+        self.assertAlmostEqual(baseline["mean_dropped_pairs"], 9.0)
+        self.assertAlmostEqual(baseline["dropped_std_pairs"], 1.0)
+        self.assertAlmostEqual(improved["mean_dropped_pairs"], 4.5)
+        self.assertAlmostEqual(improved["dropped_std_pairs"], 0.5)
         self.assertAlmostEqual(baseline["mean_edr_cv"], 0.3)
         self.assertAlmostEqual(improved["mean_edr_cv"], 0.2)
 
@@ -163,6 +161,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(len(exported), 2)
         self.assertEqual(exported[1]["algorithm"], "real_time_memory_aware")
         self.assertEqual(exported[1]["total_edr_pairs_s"], "26.000000")
+        self.assertEqual(exported[1]["dropped_std_pairs"], "0.500000")
         self.assertIn("mean_edr_cv", exported[1])
 
     def test_raw_csv_preserves_each_seed_measurement(self):

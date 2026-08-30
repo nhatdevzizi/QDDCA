@@ -18,10 +18,9 @@ ALGORITHMS = (
     ("real_time_memory_aware", 0.5),
 )
 
-# Fifty deterministic seeds make the default experiment reproducible while
-# still sampling fifty independently generated topology/request scenarios.
-DEFAULT_SEEDS = tuple(range(1, 11))
-DEFAULT_OUTPUT = "output/exp4/exp4.csv"
+# Use the same three deterministic scenarios for every sweep so the historical
+# and real-time algorithms remain directly comparable and reproducible.
+DEFAULT_SEEDS = (101, 202, 303)
 WINDOW_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
 ATTEMPT_SWEEP_OUTPUT = "output/exp4/exp4_attempt_sweep.csv"
 
@@ -48,6 +47,7 @@ CSV_FIELDS = (
     "edr_std_pairs_s",
     "mean_completed_pairs",
     "mean_dropped_pairs",
+    "dropped_std_pairs",
     "mean_in_flight_pairs",
     "mean_edr_cv",
     "edr_cv_std",
@@ -84,14 +84,6 @@ RAW_CSV_FIELDS = (
     "mean_signal_gap",
     "mean_abs_signal_gap",
 )
-
-
-def parse_int_list(value):
-    """Parse a comma-separated list of integers for CLI sweep arguments."""
-    values = tuple(int(item.strip()) for item in value.split(",") if item.strip())
-    if not values:
-        raise argparse.ArgumentTypeError("expected at least one integer")
-    return values
 
 
 def topology_signature(network):
@@ -222,7 +214,7 @@ def run_simulation(args, seed, window_size, send_max_try, algorithm, history_wei
 
 def build_cases(args):
     """Yield every reproducible ``(window, attempts, seed)`` case."""
-    attempt_values = args.attempts or (args.send_max_try,)
+    attempt_values = getattr(args, "attempts", None) or (args.send_max_try,)
     for window_size in args.windows:
         for send_max_try in attempt_values:
             for seed in args.seeds:
@@ -256,82 +248,128 @@ def percent_change(value, baseline):
     return (value - baseline) / baseline * 100.0
 
 
+def _index_measurements(measurements, default_send_max_try):
+    """Index measurements by experiment case and algorithm."""
+    grouped = {}
+    for item in measurements:
+        key = (
+            item["window_size"],
+            item.get("send_max_try", default_send_max_try),
+            item["algorithm"],
+        )
+        grouped.setdefault(key, []).append(item)
+    return grouped
+
+
+def _validate_samples(
+    samples,
+    expected_seeds,
+    expected_sample_count,
+    window_size,
+    send_max_try,
+    algorithm,
+):
+    """Ensure a case has exactly one sample for every expected seed."""
+    observed_seeds = {item["seed"] for item in samples}
+    if observed_seeds != expected_seeds or len(samples) != expected_sample_count:
+        raise ValueError(
+            "cannot aggregate incomplete or duplicate seed data for "
+            f"window_size={window_size}, send_max_try={send_max_try}, "
+            f"algorithm={algorithm}: expected {sorted(expected_seeds)}, "
+            f"observed {sorted(observed_seeds)}"
+        )
+
+
+def _summarize_samples(samples):
+    """Calculate the graph metrics for one algorithm's replicates."""
+    throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
+    edrs = [item["total_edr_pairs_s"] for item in samples]
+    dropped = [item["dropped_pairs"] for item in samples]
+    edr_cvs = [item["edr_cv"] for item in samples]
+    return {
+        "mean_request_throughput_pairs_s": statistics.fmean(throughputs),
+        "throughput_std_pairs_s": statistics.pstdev(throughputs),
+        "total_edr_pairs_s": statistics.fmean(edrs),
+        "edr_std_pairs_s": statistics.pstdev(edrs),
+        "mean_completed_pairs": statistics.fmean(
+            item["completed_pairs"] for item in samples
+        ),
+        "mean_dropped_pairs": statistics.fmean(dropped),
+        "dropped_std_pairs": statistics.pstdev(dropped),
+        "mean_in_flight_pairs": statistics.fmean(
+            item["in_flight_pairs"] for item in samples
+        ),
+        "mean_edr_cv": statistics.fmean(edr_cvs),
+        "edr_cv_std": statistics.pstdev(edr_cvs),
+    }
+
+
+def _experiment_fields(args, window_size, send_max_try):
+    """Return fields shared by every algorithm in an experiment case."""
+    return {
+        "window_size": window_size,
+        "send_max_try": send_max_try,
+        "request_count": args.requests,
+        "simulation_duration_s": args.duration,
+        "simulator_accuracy": args.accuracy,
+        "node_count": args.nodes,
+        "edge_probability": args.edge_probability,
+        "memory_size": args.memory_size,
+        "query_time_s": args.query_time,
+        "link_rate_pairs_s": args.link_rate,
+        "link_delay_s": args.link_delay,
+        "link_buffer": args.link_buffer,
+        "repetitions": len(args.seeds),
+        "seeds": ";".join(str(seed) for seed in args.seeds),
+    }
+
+
 def aggregate_measurements(measurements, args):
     """Aggregate paired replicates into graph-ready rows."""
     rows = []
     attempt_values = getattr(args, "attempts", None) or (args.send_max_try,)
+    measurement_index = _index_measurements(measurements, args.send_max_try)
+    expected_seeds = set(args.seeds)
+
     for window_size in args.windows:
         for send_max_try in attempt_values:
             grouped = {
-                algorithm: [
-                    item
-                    for item in measurements
-                    if item["window_size"] == window_size
-                    and item.get("send_max_try", args.send_max_try) == send_max_try
-                    and item["algorithm"] == algorithm
-                ]
+                algorithm: measurement_index.get(
+                    (window_size, send_max_try, algorithm), []
+                )
                 for algorithm, _ in ALGORITHMS
             }
-            expected_seeds = set(args.seeds)
             for algorithm, samples in grouped.items():
-                observed_seeds = {item["seed"] for item in samples}
-                if observed_seeds != expected_seeds or len(samples) != len(args.seeds):
-                    raise ValueError(
-                        "cannot aggregate incomplete or duplicate seed data for "
-                        f"window_size={window_size}, send_max_try={send_max_try}, "
-                        f"algorithm={algorithm}: expected {sorted(expected_seeds)}, "
-                        f"observed {sorted(observed_seeds)}"
-                    )
-            baseline = grouped["historical_only"]
-            baseline_throughput = statistics.fmean(
-                item["mean_request_throughput_pairs_s"] for item in baseline
-            )
-            baseline_edr = statistics.fmean(item["total_edr_pairs_s"] for item in baseline)
+                _validate_samples(
+                    samples,
+                    expected_seeds,
+                    len(args.seeds),
+                    window_size,
+                    send_max_try,
+                    algorithm,
+                )
+
+            summaries = {
+                algorithm: _summarize_samples(samples)
+                for algorithm, samples in grouped.items()
+            }
+            baseline = summaries["historical_only"]
+            common_fields = _experiment_fields(args, window_size, send_max_try)
 
             for algorithm, history_weight in ALGORITHMS:
-                samples = grouped[algorithm]
-                throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
-                edrs = [item["total_edr_pairs_s"] for item in samples]
-                edr_cvs = [item["edr_cv"] for item in samples]
-                mean_throughput = statistics.fmean(throughputs)
-                mean_edr = statistics.fmean(edrs)
+                summary = summaries[algorithm]
                 rows.append({
-                    "window_size": window_size,
-                    "send_max_try": send_max_try,
-                    "request_count": args.requests,
-                    "simulation_duration_s": args.duration,
-                    "simulator_accuracy": args.accuracy,
-                    "node_count": args.nodes,
-                    "edge_probability": args.edge_probability,
-                    "memory_size": args.memory_size,
-                    "query_time_s": args.query_time,
-                    "link_rate_pairs_s": args.link_rate,
-                    "link_delay_s": args.link_delay,
-                    "link_buffer": args.link_buffer,
-                    "repetitions": len(args.seeds),
-                    "seeds": ";".join(str(seed) for seed in args.seeds),
+                    **common_fields,
                     "algorithm": algorithm,
                     "congestion_history_weight": history_weight,
-                    "mean_request_throughput_pairs_s": mean_throughput,
-                    "throughput_std_pairs_s": statistics.pstdev(throughputs),
-                    "total_edr_pairs_s": mean_edr,
-                    "edr_std_pairs_s": statistics.pstdev(edrs),
-                    "mean_completed_pairs": statistics.fmean(
-                        item["completed_pairs"] for item in samples
-                    ),
-                    "mean_dropped_pairs": statistics.fmean(
-                        item["dropped_pairs"] for item in samples
-                    ),
-                    "mean_in_flight_pairs": statistics.fmean(
-                        item["in_flight_pairs"] for item in samples
-                    ),
-                    "mean_edr_cv": statistics.fmean(edr_cvs),
-                    "edr_cv_std": statistics.pstdev(edr_cvs),
+                    **summary,
                     "throughput_change_pct_vs_historical": percent_change(
-                        mean_throughput, baseline_throughput
+                        summary["mean_request_throughput_pairs_s"],
+                        baseline["mean_request_throughput_pairs_s"],
                     ),
                     "edr_change_pct_vs_historical": percent_change(
-                        mean_edr, baseline_edr
+                        summary["total_edr_pairs_s"],
+                        baseline["total_edr_pairs_s"],
                     ),
                 })
     return rows
@@ -366,43 +404,42 @@ def raw_output_path(args):
 
 def configure_sweep(args):
     """Apply a targeted sweep preset without creating a large Cartesian grid."""
-    if args.sweep in ("window-size", "send-rate"):
+    if args.sweep == "window-size":
         args.windows = tuple(range(1, 31))
         args.attempts = None
         args.send_max_try = 10
-        if args.output == DEFAULT_OUTPUT:
+        if args.output is None:
             args.output = WINDOW_SWEEP_OUTPUT
     elif args.sweep == "attempts":
-        args.windows = (30,)
+        args.windows = (12,)
         args.attempts = tuple(range(1, 11))
-        if args.output == DEFAULT_OUTPUT:
+        args.send_max_try = 10
+        if args.output is None:
             args.output = ATTEMPT_SWEEP_OUTPUT
     return args
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", help="override the selected sweep output path")
     parser.add_argument(
         "--raw-output",
         help="per-seed CSV path (default: <output stem>_raw.csv)",
     )
-    parser.add_argument("--windows", type=parse_int_list, default=(5, 10, 15, 20, 25, 30))
     parser.add_argument(
         "--sweep",
-        choices=("custom", "window-size", "send-rate", "attempts"),
-        default="custom",
+        choices=("window-size", "attempts"),
+        default="window-size",
         help=(
-            "targeted sweep preset: window-size uses w=1..30 at M=10; "
-            "attempts uses M=1..10 at w=30; send-rate is a legacy alias "
-            "for window-size"
+            "window-size writes w=1..30 at M=10; attempts writes M=1..10 "
+            "at w=30"
         ),
     )
-    parser.add_argument(
-        "--seeds",
-        type=parse_int_list,
-        default=DEFAULT_SEEDS,
-        help="comma-separated seeds (default: 1 through 50)",
+    parser.set_defaults(
+        seeds=DEFAULT_SEEDS,
+        windows=(),
+        attempts=None,
+        send_max_try=10,
     )
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--accuracy", type=int, default=1000)
@@ -410,12 +447,6 @@ def build_parser():
     parser.add_argument("--edge-probability", type=float, default=0.1)
     parser.add_argument("--requests", type=int, default=5)
     parser.add_argument("--memory-size", type=int, default=10)
-    parser.add_argument("--send-max-try", type=int, default=10)
-    parser.add_argument(
-        "--attempts",
-        type=parse_int_list,
-        help="comma-separated maximum-attempt sweep; defaults to --send-max-try",
-    )
     parser.add_argument("--query-time", type=float, default=0.05)
     parser.add_argument("--link-rate", type=float, default=1000.0)
     parser.add_argument("--link-delay", type=float, default=0.001)
@@ -425,8 +456,6 @@ def build_parser():
 
 def main():
     args = configure_sweep(build_parser().parse_args())
-    if len(set(args.seeds)) != len(args.seeds):
-        raise ValueError("--seeds must not contain duplicates")
     cases = tuple(build_cases(args))
     raw_path = raw_output_path(args)
     raw_path.parent.mkdir(parents=True, exist_ok=True)

@@ -77,7 +77,7 @@ memory suddenly fills is penalized immediately. Configure `alpha` with the
 reproduces historical-only scoring; `0.0` uses only current memory availability.
 
 For complete copy-paste commands that generate the paired CSV sweeps and all
-four IEEE-ready figures, see [`GRAPHING_INSTRUCTIONS.md`](GRAPHING_INSTRUCTIONS.md).
+five IEEE-ready figures, see [`GRAPHING_INSTRUCTIONS.md`](GRAPHING_INSTRUCTIONS.md).
 The completed run, code-change rationale, measured results, and limitations are
 documented in [`FULL_GRAPH_EXPERIMENT_REPORT.md`](FULL_GRAPH_EXPERIMENT_REPORT.md).
 
@@ -91,36 +91,37 @@ python exp4.py --sweep window-size
 python plot_exp4.py
 ```
 
-The default experiment uses the 50 reproducible seeds `1` through `50`. It
-writes every individual measurement to `output/exp4/exp4_raw.csv`, calculates
-the mean and population standard deviation across those seeds, and writes the
-graph-ready result to `output/exp4/exp4.csv`. Each
+The default experiment uses the fixed reproducible seeds `101`, `202`, and
+`303`. Each sweep writes its own raw and aggregate files under `output/exp4/`:
+`exp4_window_sweep*.csv` for the window sweep and
+`exp4_attempt_sweep*.csv` for the attempt sweep. Each
 window size has two rows: historical-only Q-DDCA (`alpha=1.0`) and real-time
 memory-aware Q-DDCA (`alpha=0.5`). Both use identical seeded topologies and
 request pairs. `mean_request_throughput_pairs_s` is the average successful
 distribution rate per request; `total_edr_pairs_s` is their sum, matching the
 paper's definition of total network EDR. Standard deviations and percentage
 changes versus the historical baseline are included for plotting and analysis,
-along with all simulation parameters needed to reproduce the sweep. The optional
-`--attempts` argument adds a maximum-attempt sweep while preserving the original
-`--send-max-try 10` default when it is omitted. Fairness is exported as the
+along with all simulation parameters needed to reproduce the sweep. Fairness is exported as the
 coefficient of variation of per-request EDR: population standard deviation
 divided by mean EDR, where lower values indicate fairer allocation.
 
 Use `--sweep window-size` for the targeted `w=1..30, M=10` run and `--sweep
 attempts` for the targeted `w=30, M=1..10` run. These presets select distinct
 output filenames, print paired-scenario progress, and checkpoint the raw CSV
-after every seed. Custom `--windows` and `--attempts` values remain available
-with the default `--sweep custom` mode. The former `--sweep send-rate` spelling
-remains available as a backward-compatible alias for `window-size`.
+after every seed.
 
 `plot_exp4.py` writes IEEE single-column vector PDF and 600-dpi PNG
-figures to `output/exp4/plot/`:
+figures to `output/graphs/ieee/`:
 
 1. EDR versus sending window size (`w`)
 2. EDR versus maximum attempts (`M`)
 3. Dropped qubits versus maximum attempts (`M`)
 4. EDR coefficient of variation versus sending window size (`w`)
+5. Aggregate dropped qubits versus sending window size (`w`)
+
+The aggregate CSV reports both `mean_dropped_pairs` and
+`dropped_std_pairs` across the paired seeds. The fifth graph uses the mean as
+its line value and does not display error bars.
 
 The window-size figures use the largest `M` in the CSV by default, and the
 attempt-based figures use the largest `w`. Use `--fixed-attempts` and

@@ -39,12 +39,17 @@ REQUIRED_NUMERIC_FIELDS = {
     "mean_dropped_pairs": float,
 }
 OPTIONAL_NUMERIC_FIELDS = {
+    "dropped_std_pairs": float,
     "mean_edr_cv": float,
     "edr_cv_std": float,
 }
 DEFAULT_INPUTS = (
     "output/exp4/exp4_attempt_sweep.csv",
     "output/exp4/exp4_window_sweep.csv",
+)
+DEFAULT_OUTPUT_DIR = "output/graphs"
+OPTIONAL_FIELD_GROUPS = (
+    {"mean_edr_cv", "edr_cv_std"},
 )
 
 
@@ -59,12 +64,14 @@ def read_results(path):
                 "input is missing required columns: " + ", ".join(sorted(missing))
             )
         present_optional = set(OPTIONAL_NUMERIC_FIELDS) & fieldnames
-        if present_optional and present_optional != set(OPTIONAL_NUMERIC_FIELDS):
-            missing_optional = set(OPTIONAL_NUMERIC_FIELDS) - present_optional
-            raise ValueError(
-                "input has an incomplete CV schema; missing: "
-                + ", ".join(sorted(missing_optional))
-            )
+        for field_group in OPTIONAL_FIELD_GROUPS:
+            present_group = field_group & fieldnames
+            if present_group and present_group != field_group:
+                missing_optional = field_group - present_group
+                raise ValueError(
+                    "input has an incomplete optional metric schema; missing: "
+                    + ", ".join(sorted(missing_optional))
+                )
         numeric_fields = dict(REQUIRED_NUMERIC_FIELDS)
         numeric_fields.update({
             field: OPTIONAL_NUMERIC_FIELDS[field]
@@ -88,9 +95,11 @@ def read_result_files(paths):
         for row in read_results(path):
             key = (row["window_size"], row["send_max_try"], row["algorithm"])
             existing = merged.get(key)
-            if existing is None or (
-                "mean_edr_cv" in row and "mean_edr_cv" not in existing
-            ):
+            row_score = sum(field in row for field in OPTIONAL_NUMERIC_FIELDS)
+            existing_score = sum(
+                field in existing for field in OPTIONAL_NUMERIC_FIELDS
+            ) if existing else -1
+            if existing is None or row_score > existing_score:
                 merged[key] = row
     return list(merged.values())
 
@@ -181,6 +190,7 @@ def draw_graph(
     for algorithm, samples in grouped_by_algorithm(rows, x_field).items():
         x_values = [row[x_field] for row in samples]
         y_values = [row[y_field] for row in samples]
+        #If turn on show error bars
         errors = [row[yerr] for row in samples] if show_error_bars and yerr else None
         style = dict(ALGORITHM_STYLES[algorithm])
         axis.errorbar(
@@ -246,7 +256,7 @@ def build_parser():
             "(default: the attempt sweep and window-size sweep)"
         ),
     )
-    parser.add_argument("--output-dir", default="output/exp4/plot")
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--fixed-window",
         type=int,
@@ -301,15 +311,18 @@ def main():
     apply_ieee_style(plt)
     formats = (args.format,) if args.format else args.formats
     width = 3.5 if args.column_width == "single" else 7.16
+    sending_rate_label = r"Sending rate, $w$"
+    sending_rate_title = rf"Total EDR vs. Sending Rate ($M={fixed_attempts}$)"
+    sending_rate_filename = "01_edr_vs_send_rate"
     graph_specs = [
         (
             by_window_size,
             "window_size",
             "total_edr_pairs_s",
-            r"Sending window size, $w$",
+            sending_rate_label,
             "Total EDR (qubits/s)",
-            rf"Total EDR vs. Sending Window Size ($M={fixed_attempts}$)",
-            "01_edr_vs_window",
+            sending_rate_title,
+            sending_rate_filename,
             "edr_std_pairs_s",
         ),
         (
@@ -333,22 +346,41 @@ def main():
             None,
         ),
     ]
-    cv_fields = {"mean_edr_cv", "edr_cv_std"}
-    if all(cv_fields <= set(row) for row in by_window_size):
+    fairness_fields = {"mean_edr_cv", "edr_cv_std"}
+    graph_specs.append((
+        by_window_size,
+        "window_size",
+        "mean_dropped_pairs",
+        sending_rate_label,
+        "Mean dropped qubits",
+        rf"Dropped Qubits vs. Sending Rate ($M={fixed_attempts}$)",
+        "05_dropped_vs_send_rate",
+        None,
+    ))
+    fairness_spec = (
+        "mean_edr_cv",
+        "Coefficient of variation (CV)",
+        rf"EDR Fairness vs. Sending Rate ($M={fixed_attempts}$)",
+        "04_fairness_vs_send_rate",
+        "edr_cv_std",
+    )
+
+    if all(fairness_fields <= set(row) for row in by_window_size):
+        y_field, ylabel, title, filename, yerr = fairness_spec
         graph_specs.append((
             by_window_size,
             "window_size",
-            "mean_edr_cv",
-            r"Sending window size, $w$",
-            "Coefficient of variation (CV)",
-            rf"EDR Fairness vs. Sending Window Size ($M={fixed_attempts}$)",
-            "04_fairness_vs_window",
-            "edr_cv_std",
+            y_field,
+            sending_rate_label,
+            ylabel,
+            title,
+            filename,
+            yerr,
         ))
     else:
         message = (
-            "Skipping 04_fairness_vs_window: aggregate input lacks "
-            "mean_edr_cv and edr_cv_std; rerun the window-size sweep"
+            "Skipping fourth fairness graph: aggregate input lacks the CV "
+            "metric; rerun the matching window-size sweep"
         )
         if args.strict:
             raise ValueError(message)
