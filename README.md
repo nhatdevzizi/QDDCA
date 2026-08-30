@@ -104,6 +104,9 @@ changes versus the historical baseline are included for plotting and analysis,
 along with all simulation parameters needed to reproduce the sweep. Fairness is exported as the
 coefficient of variation of per-request EDR: population standard deviation
 divided by mean EDR, where lower values indicate fairer allocation.
+The dropped-qubit ratio is calculated independently for each seed as
+`dropped / (delivered + dropped)`, where delivered is `completed_pairs`, and
+then averaged across seeds.
 
 Use `--sweep window-size` for the targeted `w=1..30, M=10` run and `--sweep
 attempts` for the targeted `w=30, M=1..10` run. These presets select distinct
@@ -115,13 +118,13 @@ figures to `output/graphs/ieee/`:
 
 1. EDR versus sending window size (`w`)
 2. EDR versus maximum attempts (`M`)
-3. Dropped qubits versus maximum attempts (`M`)
+3. Dropped-qubit ratio versus maximum attempts (`M`)
 4. EDR coefficient of variation versus sending window size (`w`)
-5. Aggregate dropped qubits versus sending window size (`w`)
+5. Dropped-qubit ratio versus sending window size (`w`)
 
-The aggregate CSV reports both `mean_dropped_pairs` and
-`dropped_std_pairs` across the paired seeds. The fifth graph uses the mean as
-its line value and does not display error bars.
+The CSV retains the absolute counts in `mean_dropped_pairs` and
+`dropped_std_pairs` for auditing, while the dropped-qubit graphs use
+`mean_drop_ratio`. The graphs do not display error bars.
 
 The window-size figures use the largest `M` in the CSV by default, and the
 attempt-based figures use the largest `w`. Use `--fixed-attempts` and

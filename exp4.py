@@ -20,7 +20,7 @@ ALGORITHMS = (
 
 # Use the same three deterministic scenarios for every sweep so the historical
 # and real-time algorithms remain directly comparable and reproducible.
-DEFAULT_SEEDS = (101, 202, 303)
+DEFAULT_SEEDS = tuple(range(101,116))
 WINDOW_SWEEP_OUTPUT = "output/exp4/exp4_window_sweep.csv"
 ATTEMPT_SWEEP_OUTPUT = "output/exp4/exp4_attempt_sweep.csv"
 
@@ -48,6 +48,8 @@ CSV_FIELDS = (
     "mean_completed_pairs",
     "mean_dropped_pairs",
     "dropped_std_pairs",
+    "mean_drop_ratio",
+    "drop_ratio_std",
     "mean_in_flight_pairs",
     "mean_edr_cv",
     "edr_cv_std",
@@ -76,6 +78,7 @@ RAW_CSV_FIELDS = (
     "total_edr_pairs_s",
     "completed_pairs",
     "dropped_pairs",
+    "drop_ratio",
     "in_flight_pairs",
     "request_edrs_pairs_s",
     "edr_cv",
@@ -135,11 +138,13 @@ def collect_metrics(network, args):
     per_request_throughput = [count / args.duration for count in completed_by_request]
     signal_gaps = signal_gap_snapshot(network)
 
+    dropped = sum(len(source.dropList) for source in network.s)
     return {
         "mean_request_throughput_pairs_s": statistics.fmean(per_request_throughput),
         "total_edr_pairs_s": completed / args.duration,
         "completed_pairs": completed,
-        "dropped_pairs": sum(len(source.dropList) for source in network.s),
+        "dropped_pairs": dropped,
+        "drop_ratio": dropped / (completed + dropped) if completed + dropped else 0.0,
         "in_flight_pairs": sum(len(source.sendingList) for source in network.s),
         "request_edrs_pairs_s": ";".join(
             f"{throughput:.6f}" for throughput in per_request_throughput
@@ -285,6 +290,15 @@ def _summarize_samples(samples):
     throughputs = [item["mean_request_throughput_pairs_s"] for item in samples]
     edrs = [item["total_edr_pairs_s"] for item in samples]
     dropped = [item["dropped_pairs"] for item in samples]
+    drop_ratios = [
+        item.get(
+            "drop_ratio",
+            item["dropped_pairs"] / (item["completed_pairs"] + item["dropped_pairs"])
+            if item["completed_pairs"] + item["dropped_pairs"]
+            else 0.0,
+        )
+        for item in samples
+    ]
     edr_cvs = [item["edr_cv"] for item in samples]
     return {
         "mean_request_throughput_pairs_s": statistics.fmean(throughputs),
@@ -296,6 +310,8 @@ def _summarize_samples(samples):
         ),
         "mean_dropped_pairs": statistics.fmean(dropped),
         "dropped_std_pairs": statistics.pstdev(dropped),
+        "mean_drop_ratio": statistics.fmean(drop_ratios),
+        "drop_ratio_std": statistics.pstdev(drop_ratios),
         "mean_in_flight_pairs": statistics.fmean(
             item["in_flight_pairs"] for item in samples
         ),
@@ -443,9 +459,9 @@ def build_parser():
     )
     parser.add_argument("--duration", type=float, default=10.0)
     parser.add_argument("--accuracy", type=int, default=1000)
-    parser.add_argument("--nodes", type=int, default=50)
+    parser.add_argument("--nodes", type=int, default=100)
     parser.add_argument("--edge-probability", type=float, default=0.1)
-    parser.add_argument("--requests", type=int, default=5)
+    parser.add_argument("--requests", type=int, default=10)
     parser.add_argument("--memory-size", type=int, default=10)
     parser.add_argument("--query-time", type=float, default=0.05)
     parser.add_argument("--link-rate", type=float, default=1000.0)

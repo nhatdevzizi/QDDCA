@@ -1,4 +1,5 @@
 import csv
+import statistics
 import tempfile
 import unittest
 from pathlib import Path
@@ -146,6 +147,20 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertAlmostEqual(baseline["dropped_std_pairs"], 1.0)
         self.assertAlmostEqual(improved["mean_dropped_pairs"], 4.5)
         self.assertAlmostEqual(improved["dropped_std_pairs"], 0.5)
+        expected_baseline_ratios = (10 / 210, 8 / 248)
+        expected_improved_ratios = (5 / 245, 4 / 284)
+        self.assertAlmostEqual(
+            baseline["mean_drop_ratio"],
+            statistics.fmean(expected_baseline_ratios),
+        )
+        self.assertAlmostEqual(
+            baseline["drop_ratio_std"],
+            statistics.pstdev(expected_baseline_ratios),
+        )
+        self.assertAlmostEqual(
+            improved["mean_drop_ratio"],
+            statistics.fmean(expected_improved_ratios),
+        )
         self.assertAlmostEqual(baseline["mean_edr_cv"], 0.3)
         self.assertAlmostEqual(improved["mean_edr_cv"], 0.2)
 
@@ -162,6 +177,7 @@ class MeasurementExportTests(unittest.TestCase):
         self.assertEqual(exported[1]["algorithm"], "real_time_memory_aware")
         self.assertEqual(exported[1]["total_edr_pairs_s"], "26.000000")
         self.assertEqual(exported[1]["dropped_std_pairs"], "0.500000")
+        self.assertEqual(exported[1]["mean_drop_ratio"], "0.017246")
         self.assertIn("mean_edr_cv", exported[1])
 
     def test_raw_csv_preserves_each_seed_measurement(self):

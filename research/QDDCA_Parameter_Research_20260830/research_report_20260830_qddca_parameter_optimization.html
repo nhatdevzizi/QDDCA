@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QDDCA Retry and Sending-Window Optimization - Deep Research Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #1a1a1a;
+            background: #ffffff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+        }
+
+        .header {
+            background: #003d5c;
+            color: white;
+            padding: 25px 40px;
+            border-bottom: 3px solid #002840;
+        }
+
+        .header h1 {
+            font-size: 26px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header-meta {
+            font-size: 13px;
+            color: #b8d4e6;
+            display: flex;
+            gap: 25px;
+        }
+
+        .metrics-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0;
+            border-bottom: 2px solid #003d5c;
+        }
+
+        .metric {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-right: 1px solid #d1d5db;
+            text-align: center;
+        }
+
+        .metric:last-child {
+            border-right: none;
+        }
+
+        .metric-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #003d5c;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 30px 40px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #003d5c;
+            margin: 32px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #003d5c;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            line-height: 1.3;
+        }
+
+        .subsection-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin: 24px 0 12px 0;
+            line-height: 1.4;
+        }
+
+        .executive-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #003d5c;
+        }
+
+        .executive-summary p {
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        p {
+            margin-bottom: 14px;
+            line-height: 1.7;
+            text-align: left;
+        }
+
+        /* Better paragraph spacing in content sections */
+        .content > p,
+        .section p {
+            margin-bottom: 16px;
+        }
+
+        .findings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .finding-card {
+            background: #f8f9fa;
+            padding: 18px;
+            border-left: 3px solid #003d5c;
+        }
+
+        .finding-card h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 10px;
+        }
+
+        .finding-card p {
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+
+        .data-table th {
+            background: #003d5c;
+            color: white;
+            padding: 10px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        ul, ol {
+            margin: 16px 0 16px 28px;
+            padding-left: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            padding-left: 8px;
+        }
+
+        /* Nested lists */
+        li ul, li ol {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* Better bullet/number spacing */
+        ol {
+            list-style-position: outside;
+            padding-left: 0;
+        }
+
+        ul {
+            list-style-position: outside;
+            padding-left: 0;
+        }
+
+        .key-insight {
+            background: white;
+            border: 1px solid #d1d5db;
+            border-left: 3px solid #003d5c;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .key-insight strong {
+            color: #003d5c;
+            font-weight: 600;
+        }
+
+        .citation {
+            color: #003d5c;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            position: relative;
+            padding: 2px 4px;
+            background: #f0f7fc;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .citation:hover {
+            background: #003d5c;
+            color: white;
+        }
+
+        /* Attribution Gradients (2025 Enhancement) */
+        .citation-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 8px;
+            background: white;
+            border: 2px solid #003d5c;
+            box-shadow: 0 4px 12px rgba(0, 61, 92, 0.15);
+            padding: 12px;
+            min-width: 300px;
+            max-width: 500px;
+            z-index: 1000;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .citation:hover .citation-tooltip {
+            display: block;
+        }
+
+        .tooltip-title {
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 8px;
+            font-size: 13px;
+            border-bottom: 1px solid #d1d5db;
+            padding-bottom: 6px;
+        }
+
+        .tooltip-source {
+            color: #4a5568;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+
+        .tooltip-claim {
+            background: #f8f9fa;
+            padding: 8px;
+            margin-top: 8px;
+            border-left: 3px solid #003d5c;
+            font-size: 11px;
+        }
+
+        .tooltip-claim-label {
+            font-weight: 600;
+            color: #003d5c;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .evidence-chain {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #d1d5db;
+        }
+
+        .evidence-chain-label {
+            font-weight: 600;
+            color: #003d5c;
+            font-size: 11px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .evidence-step {
+            padding: 6px;
+            background: #f8f9fa;
+            margin-bottom: 4px;
+            font-size: 11px;
+            border-left: 2px solid #d1d5db;
+            padding-left: 8px;
+        }
+
+        .bibliography {
+            background: #f8f9fa;
+            padding: 30px;
+            margin-top: 40px;
+            border-left: 4px solid #003d5c;
+        }
+
+        .bibliography-content {
+            background: #f8f9fa;
+            padding: 20px 0;
+        }
+
+        .bib-entry {
+            margin-bottom: 18px;
+            padding-left: 50px;
+            text-indent: -50px;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        .bib-number {
+            color: #003d5c;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .bib-entry a {
+            color: #003d5c;
+            word-wrap: break-word;
+            text-decoration: none;
+        }
+
+        .bib-entry a:hover {
+            text-decoration: underline;
+        }
+
+        .compact-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .compact-list li {
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .info-box {
+            background: white;
+            border: 1px solid #d1d5db;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .info-box h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #003d5c;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .highlight-stat {
+            font-weight: 700;
+            color: #003d5c;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        @media print {
+            .container {
+                max-width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .metrics-dashboard {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .findings-grid {
+                grid-template-columns: 1fr;
+            }
+            .compact-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <style>
+      figure { margin: 18px 0; page-break-inside: avoid; }
+      figure img { width: 100%; height: auto; display: block; }
+      figcaption { font-size: 9pt; color: #4a5568; margin-top: 6pt; }
+      table, .executive-summary, .key-insight, figure { page-break-inside: avoid; }
+      h2, h3, h4 { page-break-after: avoid; }
+      p { orphans: 3; widows: 3; }
+      @page { size: A4; margin: 18mm 16mm 18mm 16mm;
+        @bottom-center { content: counter(page); font-size: 8pt; color: #666; }
+      }
+      @media print {
+        body { font-size: 10pt; line-height: 1.5; }
+        .header h1 { font-size: 22pt; }
+        .section-title { font-size: 14pt; }
+        .subsection-title { font-size: 11pt; }
+        .metrics-dashboard { display: table; width: 100%; }
+        .metric { display: table-cell; width: 25%; padding: 8pt; }
+        .metric-number { font-size: 18pt; }
+        .content { padding: 18pt 22pt; }
+        .bib-entry, .bibliography-content { font-size: 8pt; }
+      }
+    </style>
+    
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>QDDCA Retry and Sending-Window Optimization</h1>
+            <div class="header-meta">
+                <span>2026-08-30</span>
+                <span>•</span>
+                <span>16 Sources</span>
+            </div>
+        </div>
+
+        
+    <div class="metrics-dashboard">
+      <div class="metric"><span class="metric-number">w=2</span><span class="metric-label">Exact window</span></div>
+      <div class="metric"><span class="metric-number">M=3</span><span class="metric-label">Minimum retry plateau</span></div>
+      <div class="metric"><span class="metric-number">194.87</span><span class="metric-label">EDR pairs/s</span></div>
+      <div class="metric"><span class="metric-number">0.001909</span><span class="metric-label">Request CV</span></div>
+    </div>
+    
+
+        <div class="content">
+            <div class="section"><div class="executive-summary"><h2 class="section-title">Executive Summary</h2>
+
+<p>The full <code>w=1..30 × M=1..10</code> paired experiment identifies <strong>sending window <code>w=2</code> and maximum attempts <code>M=3</code></strong> as the best endpoint under the user's exact three-objective monotonicity rule. For real-time memory-aware Q-DDCA, this point produces a mean total entanglement distribution rate (EDR) of <strong>194.8667 pairs/s</strong>, <strong>zero dropped pairs</strong>, and a mean per-request EDR coefficient of variation (CV) of <strong>0.001909</strong> across seeds 101, 202, and 303 [14][15][16]. It is the highest-EDR point reachable from <code>(w=1,M=1)</code> by increasing one parameter at a time without worsening any of the three aggregate metrics [16].
+</p>
+
+<p><code>M=3</code> is the minimum useful retry ceiling at <code>w=2</code>: moving from <code>M=1</code> to <code>2</code> to <code>3</code> increases EDR from 190.5333 to 193.6000 to 194.8667 pairs/s, reduces mean drops from 43.3333 to zero, and reduces CV from 0.030535 to 0.001909. Values <code>M=4..10</code> produce the same measured aggregate result, so they add no benefit in this operating regime [14][15]. Moving from <code>w=1</code> to <code>w=2</code> at <code>M=3</code> nearly doubles EDR, preserves zero drops, and slightly lowers aggregate CV. Moving onward to <code>w=3</code> increases EDR again but raises CV, breaking the requested monotonic fairness condition [14][16].
+</p>
+
+<p>There is no universal optimum. A <strong>practical throughput-oriented alternative is <code>w=3, M=4</code></strong>, which yields 290.6667 pairs/s, zero drops, and CV 0.006064—still equivalent to a Jain fairness index of about 0.99996—but it violates strict cross-window CV monotonicity [3][14]. The global EDR maximum, <code>w=13, M=3</code>, reaches 604.2667 pairs/s but incurs 1,924 mean drops and CV 0.346438, demonstrating the throughput–loss–fairness trade-off [14].
+</p>
+
+<p><strong>Primary recommendation:</strong> use <strong><code>w=2, M=3</code></strong> when the monotonic constraint is mandatory; use <strong><code>w=3, M=4</code></strong> when zero observed drops and very high fairness are acceptable constraints and an additional 49.2% EDR is worth a small absolute CV increase. Confidence is <strong>moderate for these exact simulations but low for generalization</strong>, because only three random seeds and one network configuration were tested [15].
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Introduction</h2>
+
+<h3 class="subsection-title">Research Question</h3>
+
+<p>The research question is: <em>What maximum retry count and sending rate/window should the new, real-time memory-aware Q-DDCA use so that total EDR increases monotonically, dropped qubits decrease monotonically, and fairness CV also decreases monotonically?</em> The motivating concern is that real-time memory awareness can increase aggregate EDR while creating a throughput–fairness trade-off.
+</p>
+
+<p>The local implementation does not sweep a literal source rate in pairs per second. It sweeps the concurrency or sending window <code>w</code>, while link rate remains fixed at 1,000 pairs/s and query time at 0.05 seconds [10][14]. The Q-DDCA paper also calls <code>w</code> a sending-rate or window-per-hop control: it limits how many entangled pairs a source distributes concurrently [1]. This report therefore uses “sending window” for technical precision and notes “sending rate” where matching the paper's terminology.
+</p>
+
+<h3 class="subsection-title">Scope and Methodology</h3>
+
+<p>The original local results contained two orthogonal slices: <code>w=1..30</code> at <code>M=10</code>, and <code>M=1..10</code> at <code>w=12</code> [12][13]. Those slices cannot identify a joint optimum because they do not observe combinations such as <code>(w=2,M=3)</code>. I therefore ran the complete Cartesian grid of 300 parameter pairs for both historical-only Q-DDCA (<code>alpha=1.0</code>) and real-time memory-aware Q-DDCA (<code>alpha=0.5</code>), using the same three seeds for each paired comparison. The resulting dataset contains 600 aggregate rows and 1,800 per-seed algorithm measurements [14][15]. The simulator configuration remained: 50 nodes, edge probability 0.1, five concurrent requests, ten memory slots per node, ten simulated seconds, 1,000-Hz links, 0.001-second link delay, and link buffer one [10][14]. SimQN is a discrete-event network-layer simulator designed for quantum routing, entanglement distribution, and resource-allocation studies [7].
+</p>
+
+<p>“Monotonic” was defined before analyzing the full grid. For a parameter increase from state A to state B, the transition is non-worsening when <code>EDR_B ≥ EDR_A</code>, <code>drops_B ≤ drops_A</code>, and <code>CV_B ≤ CV_A</code>. Equality is permitted because a drop count already at zero cannot strictly decrease. A monotone operating path begins at <code>(w=1,M=1)</code> and increases <code>w</code> or <code>M</code> by one at each step. The “exact optimum” is the reachable endpoint with the greatest EDR, with CV and drops used as tie-breakers [16]. Strict transitions, where all three inequalities are strict, were also recorded, but strict global monotonicity is impossible wherever the initial drop count is zero.
+</p>
+
+<p>The statistical analysis is exploratory. Each aggregate cell averages only three paired seeds. Rather than run an underpowered family of hundreds of hypothesis tests, the analysis reports means, standard deviations, exact seed-direction consistency, and effect magnitudes. With <code>n=3</code>, even all three non-tied differences in the same direction cannot produce a two-sided exact sign-test value below 0.25. Inferential claims would therefore give false precision. The selection is an operating-point result for this simulation configuration, not proof of a population optimum.
+</p>
+
+<h3 class="subsection-title">Key Assumptions</h3>
+
+<p>The analysis assumes that per-request EDR is the appropriate allocation outcome, that lower CV means greater fairness, and that aggregate EDR, dropped-pair count, and CV have equal veto power under the monotonic rule. CV is appropriate for positive request throughputs because it normalizes standard deviation by the mean. Jain, Chiu, and Hawe show that Jain fairness and CV have the exact relationship <code>J = 1/(1+CV²)</code>, so lower CV and higher Jain fairness induce the same ordering [3]. The analysis also assumes that a fixed <code>w</code> is shared across requests. The original Q-DDCA paper notes that requests with different path lengths may need proportional sending windows to share quantum memory equally, so a single global <code>w</code> can be intrinsically suboptimal in heterogeneous paths [1].
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Main Analysis</h2>
+
+<h3 class="subsection-title">Finding 1: The Exact Three-Objective Endpoint Is <code>w=2, M=3</code></h3>
+
+<p>The full-grid monotone-path audit identifies <code>(w=2,M=3)</code> as the highest-EDR endpoint reachable from <code>(1,1)</code> without worsening aggregate EDR, drops, or CV at any step [14][16]. At the endpoint, real-time memory-aware Q-DDCA achieves 194.8667 pairs/s, zero dropped pairs, and CV 0.001909. Across the three seeds, EDR has an SD of 0.0943 pairs/s and CV an SD of 0.000204; the drop SD is zero [14]. The corresponding Jain fairness is approximately 0.999996, meaning the five requests receive almost identical throughput under this test configuration [3][14].
+</p>
+
+<p>The chosen monotone path is <code>(1,1) → (1,2) → (1,3) → (2,3)</code> [16]. At <code>w=1</code>, increasing the retry ceiling does not change any measured metric: EDR remains 97.6 pairs/s, drops remain zero, and CV remains 0.002049 for <code>M=1..10</code> [14]. This equality is informative. It means retries are not being exercised at the lowest load because the next-hop memory and link resources are already available. The useful improvement occurs when the sending window increases to two. At <code>M=3</code>, the increase from <code>w=1</code> to <code>w=2</code> raises EDR by 99.66%, keeps drops at zero, and reduces aggregate CV by 6.83% [14].
+</p>
+
+<p>The endpoint is not a claim that <code>w=2</code> maximizes throughput. It maximizes throughput <strong>subject to the monotonic fairness-and-drop constraint</strong>. Increasing to <code>w=3</code> at <code>M=3</code> raises EDR from 194.8667 to 289.9333 pairs/s and keeps mean drops at zero, but CV rises from 0.001909 to 0.011321 [14]. The transition therefore fails the specified CV condition. At <code>M=4</code>, <code>w=3</code> performs even better—290.6667 pairs/s and CV 0.006064—but its CV is still greater than at <code>w=2</code> [14]. Once the user requires CV to decrease with every sending-window increase, the feasible prefix ends at <code>w=2</code>.
+</p>
+
+<p>The result is consistent with the structure of resource competition. The implementation checks next-hop memory and link capacity, reserves a memory slot and a link transmission time when both are available, and retries or drops when resources are unavailable [11]. Increasing <code>w</code> increases the number of simultaneous qubits competing for those shared resources. At low load, a larger window uses idle capacity and can equalize small timing differences. At higher load, different request paths encounter different bottlenecks, so the gains become unequal even before substantial dropping begins. Research on quantum routing likewise treats throughput, resource contention, and fairness as separate concerns rather than assuming that maximizing one automatically optimizes the others [2][4][9].
+</p>
+
+<h3 class="subsection-title">Finding 2: <code>M=3</code> Is the Minimum Useful Retry Limit at <code>w=2</code></h3>
+
+<p>At the selected window, retry behavior is cleanly monotonic. For <code>w=2</code>, increasing <code>M</code> from one to two raises mean EDR from 190.5333 to 193.6000 pairs/s, reduces mean dropped pairs from 43.3333 to zero, and reduces CV from 0.030535 to 0.009158. Increasing <code>M</code> from two to three raises EDR again to 194.8667 and reduces CV again to 0.001909 while preserving zero drops [14]. All three seeds satisfy the non-worsening condition for both transitions [15][16]. Relative to <code>M=1</code>, <code>M=3</code> raises mean EDR by 2.27%, eliminates observed drops, and reduces CV by 93.75%.
+</p>
+
+<p><code>M=3</code> is preferable to larger retry ceilings because <code>M=4..10</code> return exactly the same aggregate measurements at <code>w=2</code> [14]. A retry ceiling is a maximum, not a number that every qubit must use, so a higher ceiling need not impose cost when attempts usually succeed early. Nevertheless, no measured benefit justifies selecting a larger number in this operating regime. A lower ceiling is easier to reason about and leaves less room for long-lived retries under topologies not represented by the three seeds.
+</p>
+
+<p>The original Q-DDCA rationale supports the initial retry improvement but not unlimited retries. If a next hop accepts a request with probability <code>q</code>, the probability of acceptance within <code>M</code> attempts is <code>1-(1-q)^M</code>, which increases with <code>M</code> but has diminishing returns [1]. The maximum attempts are also bounded by quantum-memory coherence time and classical query time, represented in the paper as <code>M=T/t</code> [1]. More retries can reduce premature drops, but they cannot create memory or link capacity. Under multi-request congestion, retries can keep a request in flight, occupy memory longer, and alter which flows win access. The local one-dimensional attempt sweep at <code>w=12</code> illustrates this: EDR improves sharply from <code>M=1</code> to <code>M=2</code>, then fluctuates rather than increasing monotonically, even while drop counts continue falling [12].
+</p>
+
+<p>The relationship between retries and fairness is therefore conditional on load. At <code>w=3</code>, the aggregate means improve from <code>M=1</code> through <code>M=4</code>, after which they plateau, but the first transition is not practically non-worsening in all three seeds [15][16]. At <code>w=4</code>, the aggregate monotonic prefix ends at <code>M=5</code>; at larger windows it often ends at <code>M=2</code>, <code>3</code>, or <code>4</code> [16]. There is no single <code>M</code> that is optimal across all sending windows. <code>M=3</code> is the minimal plateau point specifically for the fairness-preserving <code>w=2</code> regime.
+</p>
+
+<h3 class="subsection-title">Finding 3: Sending Window Is the Binding Constraint on Joint Monotonicity</h3>
+
+<p>The sending-window axis ends the joint monotone region earlier than the retry axis. For fixed <code>M=3..10</code>, the aggregate window prefix extends only from <code>w=1</code> to <code>w=2</code> [16]. At <code>M=1</code> and <code>M=2</code>, even that transition fails because the higher load creates drops or raises CV before the retry mechanism is sufficiently permissive [14]. By contrast, at <code>w=1</code>, all retry values are equivalent, and at <code>w=2</code>, retries are monotonic through <code>M=3</code> and flat thereafter [14][16]. The operational sequence should therefore set a sufficient retry ceiling first and then increase the window cautiously.
+</p>
+
+<p>This behavior mirrors the original Q-DDCA paper's multiple-request result. Chen et al. report that total EDR reaches a maximum at <code>w=12</code> for five requests and then decreases under network-wide congestion; they explicitly propose congestion-responsive sending-window control as future work [1]. Their absolute optimum differs from the present grid because the implementations and comparison are different: the paper evaluates Q-DDCA against shortest-path allocation, while this repository compares historical-only Q-DDCA with a new real-time memory-aware acceptance estimator. The paper also varies memory and window-per-hop assumptions. The shared conclusion is structural: multi-request EDR cannot be expected to rise monotonically with offered concurrency.
+</p>
+
+<p>Fairness also resists monotonicity because concurrent requests traverse unequal path lengths and contend for unequal bottlenecks. The original paper uses CV for this reason and reports that equal <code>w</code> can be fair under selected configurations, while also noting that sending windows proportional to path length may be necessary for equal resource allocation [1]. Li et al. compare multiple quantum capacity-allocation policies and find that the highest-throughput policy can compromise request fairness, whereas progressive filling maximizes fairness [2]. Bali et al. similarly show that max-min, median rate, Jain index, and computational cost can rank quantum spectrum-allocation methods differently [5]. These independent results support treating the observed CV increase at <code>w=3</code> as a genuine objective conflict, not merely a plotting anomaly.
+</p>
+
+<p>The term “optimal sending rate” should consequently be qualified. <code>w=2</code> is optimal only under the exact monotonic rule. If the goal instead sets an acceptable fairness threshold, a larger window can be rational. If the goal maximizes EDR regardless of fairness and loss, a much larger window is selected. A control policy that adapts <code>w</code> to measured congestion and request path characteristics is more defensible than one global constant for every topology.
+</p>
+
+<h3 class="subsection-title">Finding 4: A Practical Alternative Is <code>w=3, M=4</code></h3>
+
+<p>The exact monotonic rule is conservative because it rejects any CV increase, however small in absolute terms. The point <code>(w=3,M=4)</code> offers a useful alternative: mean EDR is 290.6667 pairs/s, mean drops are zero, and mean CV is 0.006064 [14]. Relative to <code>(w=2,M=3)</code>, EDR rises by 49.16% while CV rises from 0.001909 to 0.006064. Although that is a 217.7% relative CV increase, both values indicate extremely even per-request throughput. The equivalent Jain fairness declines only from about 0.999996 to 0.999963 [3][14].
+</p>
+
+<p>This point is useful when the engineering requirement is “no observed drops and CV below 0.01” rather than “CV must decline at every window step.” It is the highest-EDR zero-drop point in the tested grid satisfying CV ≤ 0.01 [14]. The new Q-DDCA also compares favorably with historical-only Q-DDCA there: historical EDR is 283.3667 pairs/s, mean drops are 1.6667, and CV is 0.038505; the memory-aware algorithm raises EDR by 2.58%, eliminates observed drops, and reduces CV by 84.25% [14][15].
+</p>
+
+<p>The difference between exact and practical recommendations demonstrates why a multi-objective problem rarely has one context-free optimum. Online routing literature explicitly develops algorithms that approximate throughput and fairness simultaneously because maximizing throughput alone is not equivalent to serving the most starved flow [8]. Recent quantum-network optimization work likewise formulates fairness among concurrent requests together with quantum resource constraints rather than adding fairness after maximizing aggregate utility [9]. A multi-commodity-flow formulation can maximize total entanglement rate under fidelity constraints, but total-rate maximization alone does not specify how that rate is divided among requests [6].
+</p>
+
+<p>The correct choice depends on the service objective. For a formal monotonicity demonstration, use <code>(2,3)</code>. For a high-fairness operating point with zero observed drops, use <code>(3,4)</code>. If a deployment can accept nonzero loss and CV around 0.35, it may operate nearer the throughput peak, but that is a qualitatively different policy. These options are on a Pareto frontier; one cannot improve EDR, drops, and CV simultaneously by moving from one to another [16].
+</p>
+
+<h3 class="subsection-title">Finding 5: The Global EDR Maximum Is Not the Requested Optimum</h3>
+
+<p>The largest mean EDR in the new-Q-DDCA grid is 604.2667 pairs/s at <code>(w=13,M=3)</code> [14]. This is 210.1% higher than the exact monotonic endpoint, but it comes with 1,924 mean dropped pairs and CV 0.346438. Its Jain fairness is approximately 0.89284 [3][14]. The point maximizes aggregate throughput, yet it fails both the loss and fairness requirements. It is therefore wrong to report <code>w=13,M=3</code> as “optimal” without naming the objective.
+</p>
+
+<p>The grid contains 67 Pareto-efficient cells for the new algorithm [16]. That relatively large frontier is evidence of a real three-way trade-off: many parameter pairs cannot be improved in one metric without worsening another. At 95% of the global maximum EDR, the lowest-drop observed configuration is approximately <code>(w=11,M=10)</code>, with 583.3333 pairs/s, 220.6667 mean drops, and CV 0.390486 [14]. This point may be attractive for a throughput-focused service, but it clearly does not meet the user's monotonic fairness condition.
+</p>
+
+<p>The original Q-DDCA design predicts diminishing retry benefits and window-driven congestion. Multiple attempts improve acceptance probability, while rerouting can use alternative paths until congestion becomes network-wide [1]. The real-time memory-aware estimator improves the next-hop signal by blending historical acceptance with current free-memory fraction, but it does not implement a fairness scheduler or reserve per-request shares [10][11]. A neighbor can look attractive because it has free memory even if repeatedly choosing it benefits requests whose topology already gives them shorter or less-contended paths. Aggregate memory awareness is therefore not sufficient to guarantee monotonic request fairness.
+</p>
+
+<p>This finding directly addresses the motivating concern. The throughput–fairness trade-off is not merely possible; it is visible across the full parameter surface. However, the trade-off is avoidable at low load and can be bounded with an explicit CV threshold. The new algorithm is not inherently unfair—it is missing an explicit fairness objective.
+</p>
+
+<h3 class="subsection-title">Finding 6: Statistical Evidence Is Too Small for a Universal Claim</h3>
+
+<p>The aggregate endpoint is reproducible as a deterministic result of the three selected seeds, but the seed-level audit weakens any universal conclusion. At <code>(w=2,M=3)</code>, the new-versus-historical improvement is concentrated in seed 202; seeds 101 and 303 are effectively tied on EDR and CV [15]. The mean new-QDDCA advantage over historical Q-DDCA at this point is only 0.41% EDR, while CV is 70.56% lower [14]. With only three paired observations, the apparent CV reduction is driven largely by one topology.
+</p>
+
+<p>The monotone transition from <code>(w=2,M=1)</code> to <code>(w=2,M=2)</code> and then <code>(w=2,M=3)</code> is non-worsening for every seed [15][16]. The cross-window transition <code>(w=1,M=3)</code> to <code>(w=2,M=3)</code> is exactly non-worsening in only one seed because two seeds show a CV increase of roughly 0.000004; under the prespecified practical tolerance of 0.0001 CV, all three seeds are consistent [16]. This distinction is why the report calls <code>(2,3)</code> the <strong>exact aggregate</strong> endpoint and a <strong>practically seed-consistent</strong> endpoint, rather than an exactly seed-wise monotonic theorem.
+</p>
+
+<p>No conventional normality test, t-test, or ANOVA is defensible with three seeds across 300 parameter cells. Multiple testing would compound the problem, and a non-significant result would mostly indicate low power. A better confirmatory design would use at least 30 paired seeds, retain identical topology and request pairs across algorithms, pre-register the candidate comparisons <code>(2,3)</code>, <code>(3,4)</code>, and a throughput-oriented point, and report paired bootstrap confidence intervals for EDR, drops, and CV. If monotonicity itself is the estimand, the analysis should report the probability that each adjacent transition satisfies all three inequalities, not three disconnected p-values.
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Synthesis and Insights</h2>
+
+<p>The parameter surface has three operating regimes. At <code>w=1</code>, the network is underloaded: retry count is irrelevant because no drops occur and EDR is limited by the single in-flight window. At <code>w=2</code>, retries matter until <code>M=3</code>, after which the system reaches a zero-drop, almost perfectly fair plateau. At larger windows, EDR rises toward a broad maximum, but drops and CV become active objectives and no longer move in a common direction [14][16]. This regime structure explains why “more retries” and “higher sending rate” are valid only locally.
+</p>
+
+<p>The most important insight is that retries and sending window play different roles. <code>M</code> controls how long a qubit can search or wait after resource denial; it reduces avoidable drops until acceptance probability saturates. <code>w</code> controls offered concurrency; it creates the contention that retries attempt to overcome. Raising <code>M</code> cannot permanently compensate for a window that overloads shared memories and links. In this dataset, the good tuning order is therefore: choose a conservative <code>w</code>, raise <code>M</code> until EDR/drop/CV plateau, then cautiously raise <code>w</code> while monitoring fairness.
+</p>
+
+<p>The second insight is that CV should become a control signal rather than remain only an output metric. The current router scores neighbors with history and live memory but does not consider each request's achieved EDR [10][11]. A fairness-aware extension could reduce a request's window when its achieved EDR exceeds the network median, increase the window for starved requests, or add a fairness penalty to the next-hop utility. The original paper already suggests congestion-responsive window control, and broader quantum resource-allocation research supports explicit max-min or utility-fairness objectives [1][5][9].
+</p>
+
+<p>The third insight is that the exact monotonic optimum is too conservative for many applications. CV values of 0.0019 and 0.0061 both correspond to Jain fairness above 0.99996 [3]. If the service-level objective is “Jain fairness ≥0.9999 and zero observed drops,” <code>(3,4)</code> is plainly superior in EDR. The optimality definition should therefore be written as constraints—such as <code>drops=0</code>, <code>CV≤0.01</code>, and maximum EDR—rather than as a demand that CV decline with every parameter increase.
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Limitations and Caveats</h2>
+
+<p>The dominant limitation is sample size. Three seeds do not represent the distribution of 50-node random graphs, request pairs, path lengths, and congestion patterns [15]. Cell-wise SDs are often large in the congested regime, indicating topology sensitivity [14]. The results apply to one request count, memory size, edge probability, simulator duration, query interval, link rate, link delay, and buffer size. Changing any of these can move the operating boundary.
+</p>
+
+<p>The simulation model also abstracts physical quantum behavior. The parameter <code>M</code> is constrained in the paper by coherence time and query duration, but the local experiment uses a retry ceiling without modeling every physical source of fidelity loss [1][10]. The NIST survey emphasizes that quantum routing must also account for fidelity, probabilistic swapping, and short entangled-state lifetimes [4]. A deployment optimum must include those constraints.
+</p>
+
+<p>CV is an outcome-fairness measure, not a direct record of memory-slot or link-timeslot allocation. It treats proportional differences symmetrically and is undefined at zero mean; the local code reports zero when all request EDRs are zero [10]. Jain fairness is a monotone transformation of CV for positive values, but neither metric protects a priority class or encodes different service demands [3]. A weighted fairness definition may be necessary if requests have heterogeneous fidelity, deadlines, or commercial priority.
+</p>
+
+<p>The global-grid search is exploratory because its exact selection rule was formalized before the full run but after observing earlier one-dimensional sweeps. Confirmatory work should run new seeds that were not used to propose <code>(2,3)</code> and <code>(3,4)</code>. The local results should also be compared against the paper's original implementation and parameterization before claiming that the new estimator changes Q-DDCA's published behavior.
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Counterevidence Register</h2>
+
+<p>The strongest counterevidence to a universal <code>(w=2,M=3)</code> recommendation is the practical point <code>(w=3,M=4)</code>: it increases EDR by 49.2% with zero observed drops and still has a very small CV of 0.006064 [14]. This contradicts any interpretation that <code>(2,3)</code> is generally performance-optimal; it is optimal only under the exact cross-window monotonic-CV constraint. The global EDR maximum at <code>(13,3)</code> is further counterevidence to throughput optimality, although its drop and CV values make it unsuitable under the user's full objective [14][16].
+</p>
+
+<p>The strongest counterevidence to exact seed-wise monotonicity is that the <code>(w=1,M=3) → (w=2,M=3)</code> CV direction is exact in only one of three seeds. Two seeds increase CV by approximately 0.000004, although all three satisfy a practical tolerance of 0.0001 [15][16]. This reduces the endpoint's statistical confidence and motivates new paired seeds.
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Recommendations</h2>
+
+<p>Use <strong><code>w=2, M=3</code></strong> for the next controlled experiment when the requirement is literal aggregate monotonicity across EDR, drops, and CV. This is the smallest retry ceiling that reaches the <code>w=2</code> plateau, and it avoids spending retry budget with no measured gain [14]. Do not describe it as the maximum-throughput point; describe it as the <strong>monotonic fairness-preserving point</strong>.
+</p>
+
+<p>Use <strong><code>w=3, M=4</code></strong> as the primary practical candidate if the real engineering constraint is zero observed drops and CV below 0.01. It provides 49.2% more EDR than <code>(2,3)</code> while retaining extremely high fairness [14]. State explicitly that CV increases relative to <code>w=2</code>, so this point does not satisfy strict cross-window monotonicity.
+</p>
+
+<p>For confirmatory evaluation, run at least 30 new paired seeds on <code>(2,3)</code>, <code>(3,4)</code>, and selected high-throughput points. Preserve identical topologies and request pairs between historical and memory-aware algorithms. Report paired differences with bootstrap 95% confidence intervals, the fraction of seeds satisfying all three directions, and Holm-adjusted tests only for a small pre-registered family of comparisons.
+</p>
+
+<p>For algorithm development, make <code>w</code> adaptive per request. Use recent memory pressure, drop history, and the request's achieved EDR relative to peers. A simple controller could increase <code>w</code> only while total EDR rises, drops do not rise, and a rolling CV threshold remains satisfied. The controller should decrease <code>w</code> when CV or drops cross their thresholds. This directly operationalizes the three objectives and follows the original paper's proposal for congestion-responsive sending control [1].
+</p>
+
+<p>Finally, add an explicit fairness objective if fairness is a protocol requirement. Memory-aware next-hop selection improves congestion awareness but cannot guarantee request equality. Max-min allocation, progressive filling, or a tunable utility-fairness penalty are established ways to turn fairness from a diagnostic into a constraint [2][5][9].
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Appendix: Methodology</h2>
+
+<h3 class="subsection-title">Research Process</h3>
+
+<p>Phase 1 defined the three metrics and the monotonic path criterion. Phase 2 identified the original Q-DDCA paper, fairness foundations, quantum-routing allocation studies, SimQN documentation, local source code, and existing one-dimensional outputs as the evidence base. Phase 3 retrieved and persisted evidence from 16 sources. Phase 4 triangulated the interpretation of CV, retries, windows, congestion, and multi-objective allocation. The outline was refined when the existing slices proved insufficient for a joint optimum.
+</p>
+
+<p>Phase 5 ran a targeted 3×3 grid and then the complete 30×10 paired grid. Each <code>(w,M,seed)</code> case ran historical-only and memory-aware algorithms on identical topology signatures and request pairs [10][14][15]. Phase 6 critiqued the aggregate result using seed-level direction checks and the global Pareto surface. Phase 7 added the practical threshold-based point because the exact monotonic solution was too conservative for many applications. Phase 8 packaged the report, datasets, evidence registry, claim ledger, visualization, HTML, and PDF.
+</p>
+
+<h3 class="subsection-title">Verification Approach</h3>
+
+<p>The local computation is reproducible through <code>full_grid.py</code>, <code>analyze_full_grid.py</code>, and <code>plot_full_grid.py</code>. The aggregate table contains means and population SDs across the three seeds. The analysis script independently reconstructs monotone prefixes for every fixed <code>w</code> and fixed <code>M</code>, finds reachable monotone paths in the two-dimensional grid, identifies strict transitions, audits selected transitions per seed, and computes the three-objective Pareto frontier [16].
+</p>
+
+<p>Source credibility was prioritized as follows: peer-reviewed primary papers and the Q-DDCA paper were high-trust; NIST's peer-reviewed survey and official SimQN repository were high-trust contextual sources; local CSV files and source code were primary evidence for the actual implementation but apply only to this workspace; the Tsinghua publication page was used as an author-hosted abstract, not as a substitute for local experimental evidence. No news or social-media claims were used.
+</p>
+
+</div>
+<div class="section"><h2 class="section-title">Claims-Evidence Table</h2>
+
+<table>
+<thead><tr>
+<th>Claim</th>
+<th>Evidence</th>
+<th>Sources</th>
+<th>Confidence</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>w=2, M=3</code> is the exact aggregate-monotone endpoint</td>
+<td>Full grid, raw seed data, monotone-path audit</td>
+<td>[14], [15], [16]</td>
+<td>Moderate</td>
+</tr>
+<tr>
+<td><code>M=3</code> is the minimum plateau point at <code>w=2</code></td>
+<td>Aggregate and per-seed transitions</td>
+<td>[14], [15], [16]</td>
+<td>Moderate</td>
+</tr>
+<tr>
+<td><code>w=3</code> breaks strict cross-window CV monotonicity</td>
+<td>Aggregate grid and path audit</td>
+<td>[14], [16]</td>
+<td>High for tested seeds</td>
+</tr>
+<tr>
+<td><code>w=3, M=4</code> is the best zero-drop point with CV ≤ 0.01</td>
+<td>Constrained grid scan</td>
+<td>[14], [16]</td>
+<td>Moderate</td>
+</tr>
+<tr>
+<td>The global EDR maximum violates drop and fairness goals</td>
+<td>Aggregate grid and Pareto audit</td>
+<td>[14], [16]</td>
+<td>High for tested seeds</td>
+</tr>
+<tr>
+<td>Throughput and fairness require explicit joint treatment</td>
+<td>Independent routing and allocation literature</td>
+<td>[1], [2], [4], [5], [8], [9]</td>
+<td>High</td>
+</tr>
+<tr>
+<td>Generalization is not statistically established</td>
+<td>Three-seed raw measurements</td>
+<td>[15]</td>
+<td>High</td>
+</tr>
+</tbody></table>
+
+<h3 class="subsection-title">Artifact Inventory</h3>
+
+<ul>
+<li><code>full_grid.py</code>: complete paired experiment runner.</li>
+<li><code>full_grid.csv</code>: 600 aggregate algorithm rows.</li>
+<li><code>full_grid_raw.csv</code>: 1,800 per-seed algorithm rows.</li>
+<li><code>analyze_full_grid.py</code>: monotonicity, seed consistency, and Pareto analysis.</li>
+<li><code>full_grid_analysis.json</code>: machine-readable analysis results.</li>
+<li><code>plot_full_grid.py</code>: visualization generator.</li>
+<li><code>full_grid_tradeoffs.png</code> and <code>.pdf</code>: three-objective parameter maps.</li>
+<li><code>sources.jsonl</code>, <code>evidence.jsonl</code>, <code>claims.jsonl</code>, and <code>run_manifest.json</code>: evidence and provenance records.</li>
+</ul>
+
+<figure><img src="full_grid_tradeoffs.png" alt="Full QDDCA parameter grid"><figcaption>Figure 1. Full new-QDDCA EDR, drop, and CV parameter surface.</figcaption></figure>
+
+</div>
+<div class="section"><h2 class="section-title">Report Metadata</h2>
+
+<p><strong>Research mode:</strong> Deep exploratory analysis  
+<strong>Total registered sources:</strong> 16  
+<strong>Simulation cells:</strong> 300 parameter pairs × 2 algorithms × 3 seeds = 1,800 runs  
+<strong>Generated:</strong> 2026-08-30  
+<strong>Validation status:</strong> Passed structural, claims-evidence, HTML, and rendered-PDF checks on 2026-08-30; external references and local artifacts were audited separately
+</p>
+
+
+</div>
+
+            <div class="bibliography">
+                <div class="section-title">Bibliography</div>
+                <div class="bibliography-content">
+
+
+<div class="bib-entry"><span class="bib-number">[1]</span> L. Chen, K. Xue, J. Li, R. Li, N. Yu, Q. Sun, and J. Lu (2024). “Q-DDCA: Decentralized Dynamic Congestion Avoid Routing in Large-Scale Quantum Networks.” <em>IEEE/ACM Transactions on Networking</em>. <a href="https://doi.org/10.1109/TNET.2023.3285093" target="_blank">https://doi.org/10.1109/TNET.2023.3285093</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[2]</span> C. Li, T. Li, Y.-X. Liu, and P. Cappellaro (2021). “Effective Routing Design for Remote Entanglement Generation on Quantum Networks.” <em>npj Quantum Information</em>, 7, 10. <a href="https://doi.org/10.1038/s41534-020-00344-4" target="_blank">https://doi.org/10.1038/s41534-020-00344-4</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[3]</span> R. K. Jain, D.-M. W. Chiu, and W. R. Hawe (1984). “A Quantitative Measure of Fairness and Discrimination for Resource Allocation in Shared Computer Systems.” DEC Research Report TR-301. <a href="https://www.cs.wustl.edu/~jain/papers/ftp/fairness.pdf" target="_blank">https://www.cs.wustl.edu/~jain/papers/ftp/fairness.pdf</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[4]</span> A. Abane, M. Cubeddu, V. S. Mai, and A. Battou (2025). “Entanglement Routing in Quantum Networks: A Comprehensive Survey.” <em>IEEE Transactions on Quantum Engineering</em>. <a href="https://doi.org/10.1109/TQE.2025.3541123" target="_blank">https://doi.org/10.1109/TQE.2025.3541123</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[5]</span> R. Bali, A. N. Tittelbaugh, S. L. Jenkins, A. Agrawal, J. Horgan, M. Ruffini, D. C. Kilper, and B. A. Bash (2024). “Routing and Spectrum Allocation in Broadband Quantum Entanglement Distribution.” arXiv:2404.08744. <a href="https://arxiv.org/abs/2404.08744" target="_blank">https://arxiv.org/abs/2404.08744</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[6]</span> K. Chakraborty, D. Elkouss, B. Rijsman, and S. Wehner (2020). “Entanglement Distribution in a Quantum Network, a Multi-Commodity Flow-Based Approach.” <em>IEEE Transactions on Quantum Engineering</em>. <a href="https://doi.org/10.1109/TQE.2020.3028172" target="_blank">https://doi.org/10.1109/TQE.2020.3028172</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[7]</span> QNLab-USTC (2026). “SimQN: A Network-Layer Simulator for Quantum-Network Investigation.” GitHub repository and technical documentation. <a href="https://github.com/QNLab-USTC/SimQN" target="_blank">https://github.com/QNLab-USTC/SimQN</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[8]</span> A. Goel, A. Meyerson, and S. Plotkin (2001). “Combining Fairness with Throughput: Online Routing with Multiple Objectives.” <em>Journal of Computer and System Sciences</em>, 63(1), 62–79. <a href="https://doi.org/10.1006/jcss.2001.1755" target="_blank">https://doi.org/10.1006/jcss.2001.1755</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[9]</span> Z. Wang, X. Shi, Z. Ji, and X. Yin (2025). “Quantum Network Optimization: From Optimal Routing to Fair Resource Allocation.” <em>Proceedings of the ACM on Measurement and Analysis of Computing Systems</em>. <a href="https://quantum.cs.tsinghua.edu.cn/publication/wang-2025-1/" target="_blank">https://quantum.cs.tsinghua.edu.cn/publication/wang-2025-1/</a> (Retrieved: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[10]</span> QDDCA workspace (2026). “QDDCA exp4 Paired Experiment Implementation.” `D:/QDDCA/exp4.py` (Inspected: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[11]</span> QDDCA workspace (2026). “QDDCA Routing and Resource-Allocation Implementation.” `D:/QDDCA/entity.py` (Inspected: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[12]</span> QDDCA workspace (2026). “QDDCA Retry-Attempt Aggregate Sweep.” `D:/QDDCA/output/exp4/exp4_attempt_sweep.csv` (Generated: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[13]</span> QDDCA workspace (2026). “QDDCA Sending-Window Aggregate Sweep.” `D:/QDDCA/output/exp4/exp4_window_sweep.csv` (Generated: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[14]</span> QDDCA workspace (2026). “QDDCA Full 30 × 10 Paired Aggregate Parameter Grid.” `D:/QDDCA/research/QDDCA_Parameter_Research_20260830/full_grid.csv` (Generated: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[15]</span> QDDCA workspace (2026). “QDDCA Full Paired Parameter Grid: Per-Seed Measurements.” `D:/QDDCA/research/QDDCA_Parameter_Research_20260830/full_grid_raw.csv` (Generated: 2026-08-30).</div>
+
+<div class="bib-entry"><span class="bib-number">[16]</span> QDDCA workspace (2026). “QDDCA Full-Grid Monotonicity and Pareto Audit.” `D:/QDDCA/research/QDDCA_Parameter_Research_20260830/full_grid_analysis.json` (Generated: 2026-08-30).</div>
+
+</div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

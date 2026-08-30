@@ -37,9 +37,11 @@ REQUIRED_NUMERIC_FIELDS = {
     "total_edr_pairs_s": float,
     "edr_std_pairs_s": float,
     "mean_dropped_pairs": float,
+    "mean_drop_ratio": float,
 }
 OPTIONAL_NUMERIC_FIELDS = {
     "dropped_std_pairs": float,
+    "drop_ratio_std": float,
     "mean_edr_cv": float,
     "edr_cv_std": float,
 }
@@ -212,6 +214,8 @@ def draw_graph(
     axis.legend(frameon=False, loc="best", handlelength=2.2, borderaxespad=0.25)
     if y_field == "mean_edr_cv":
         axis.set_ylim(bottom=0.0)
+    elif y_field == "mean_drop_ratio":
+        axis.set_ylim(0.0, 1.0)
     figure.subplots_adjust(left=0.17, right=0.985, bottom=0.19, top=0.89)
     for output_format in formats:
         output_path = output_base.with_suffix(f".{output_format}")
@@ -338,10 +342,10 @@ def main():
         (
             by_attempts,
             "send_max_try",
-            "mean_dropped_pairs",
+            "mean_drop_ratio",
             r"Maximum number of attempts, $M$",
-            "Mean dropped qubits",
-            rf"Dropped Qubits vs. Number of Attempts ($w={fixed_window}$)",
+            "Dropped-qubit ratio",
+            rf"Dropped-Qubit Ratio vs. Number of Attempts ($w={fixed_window}$)",
             "03_dropped_vs_attempts",
             None,
         ),
@@ -350,10 +354,10 @@ def main():
     graph_specs.append((
         by_window_size,
         "window_size",
-        "mean_dropped_pairs",
+        "mean_drop_ratio",
         sending_rate_label,
-        "Mean dropped qubits",
-        rf"Dropped Qubits vs. Sending Rate ($M={fixed_attempts}$)",
+        "Dropped-qubit ratio",
+        rf"Dropped-Qubit Ratio vs. Sending Rate ($M={fixed_attempts}$)",
         "05_dropped_vs_send_rate",
         None,
     ))

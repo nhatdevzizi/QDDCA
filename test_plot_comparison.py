@@ -26,6 +26,7 @@ class PlotComparisonTests(unittest.TestCase):
             "total_edr_pairs_s",
             "edr_std_pairs_s",
             "mean_dropped_pairs",
+            "mean_drop_ratio",
         ]
         if include_dropped_std:
             fields.append("dropped_std_pairs")
@@ -42,6 +43,7 @@ class PlotComparisonTests(unittest.TestCase):
                     "total_edr_pairs_s": 12.5,
                     "edr_std_pairs_s": 0.5,
                     "mean_dropped_pairs": 3,
+                    "mean_drop_ratio": 0.1,
                 }
                 if include_dropped_std:
                     row["dropped_std_pairs"] = 0.25
@@ -58,6 +60,8 @@ class PlotComparisonTests(unittest.TestCase):
             "edr_std_pairs_s",
             "mean_dropped_pairs",
             "dropped_std_pairs",
+            "mean_drop_ratio",
+            "drop_ratio_std",
             "mean_edr_cv",
             "edr_cv_std",
         ]
@@ -74,6 +78,8 @@ class PlotComparisonTests(unittest.TestCase):
                         "edr_std_pairs_s": 2.0,
                         "mean_dropped_pairs": window_size * 3,
                         "dropped_std_pairs": 0.5,
+                        "mean_drop_ratio": window_size / 100,
+                        "drop_ratio_std": 0.01,
                         "mean_edr_cv": 0.2,
                         "edr_cv_std": 0.01,
                     })

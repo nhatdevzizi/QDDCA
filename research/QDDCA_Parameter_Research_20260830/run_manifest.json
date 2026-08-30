@@ -1,0 +1,20 @@
+{
+  "version": "3.0.0",
+  "query": "Find the optimal QDDCA maximum retry attempts and sending window/rate region where total EDR is non-decreasing, dropped qubits are non-increasing, and per-request EDR CV is non-increasing.",
+  "mode": "deep",
+  "started_at": "2026-08-30T11:39:42.557881+00:00",
+  "finished_at": null,
+  "assumptions": [],
+  "provider_config": {
+    "primary": "search-cli",
+    "scholarly": null
+  },
+  "report_dir": "D:\\QDDCA\\research\\QDDCA_Parameter_Research_20260830",
+  "artifact_paths": {
+    "sources": "sources.jsonl",
+    "evidence": "evidence.jsonl",
+    "claims": "claims.jsonl",
+    "report": "report.md"
+  },
+  "continuation": null
+}
