@@ -427,7 +427,7 @@ def configure_sweep(args):
         if args.output is None:
             args.output = WINDOW_SWEEP_OUTPUT
     elif args.sweep == "attempts":
-        args.windows = (12,)
+        args.windows = (30,)
         args.attempts = tuple(range(1, 11))
         args.send_max_try = 10
         if args.output is None:
