@@ -3,6 +3,7 @@
 Pure stdlib on purpose: test_predict.py imports this without qns or numpy.
 """
 import math
+import statistics
 
 # Routing arms compared by exp1/exp2/exp3: (label, allow_reroute, predictive, utility)
 # The two predictive arms share the same forward-looking estimate of p and differ
@@ -14,6 +15,12 @@ MODES = [
     ("predictive", True, True, "ratio"),
     ("predictive_cost", True, True, "cost"),
 ]
+
+
+def coefficient_of_variation(data):
+    """CV of the per-request EDR; a mean of zero (nothing completed) gives inf."""
+    mean = statistics.fmean(data)
+    return statistics.pstdev(data) / mean if mean else float("inf")
 
 
 def sec(t):

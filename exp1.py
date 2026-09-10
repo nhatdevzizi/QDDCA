@@ -5,7 +5,7 @@ import qns.utils.log as log
 import os
 import sys
 from collections import Counter
-from util import MODES
+from util import MODES, coefficient_of_variation
 import numpy as np
 
 # Every point plotted from this CSV is the mean over these paired scenarios.
@@ -13,27 +13,6 @@ SEEDS = (101, 202, 303)
 
 os.makedirs("output", exist_ok=True)
 f = open("output/exp2-7.1.csv","w", buffering=1)
-
-def coefficient_of_variation(data, ddof=0):
-    """
-    Calculate the coefficient of variation.
-
-    Parameters:
-    data: Data list or array
-    ddof: Degrees-of-freedom adjustment (0=population, 1=sample)
-
-    Returns:
-    cv: Coefficient of variation (percentage)
-    """
-    mean_val = np.mean(data)
-    std_val = np.std(data, ddof=ddof)
-
-    # Avoid division by zero
-    if mean_val == 0:
-        return float('inf')  # Return infinity
-
-    cv = std_val / mean_val
-    return cv
 
 # Fixed grid shared by every experiment: n=50, M=10, memorySize=20, reqs=5.
 # Only the sending window w is swept here.
