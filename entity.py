@@ -313,10 +313,12 @@ class QNNode(QNode):
             # Calculate the path evaluation metric
             y = (1 - (1 - p) ** (M - m)) * mt + (1 - p) ** (M - m) * metric_drop
 
-            if self.predictive:
+            if self.predictive and self.utility != "cost":
                 u = util.utility(p, mt, self.utility, self.hop_penalty)
                 better = u > max_u
             else:
+                # "cost" keeps the predictive p but decides on Y(v), so metric_drop
+                # and the remaining budget (M - m) still price the risk of dropping.
                 u = max_u
                 better = y < min_y
 

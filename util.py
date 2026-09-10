@@ -4,11 +4,15 @@ Pure stdlib on purpose: test_predict.py imports this without qns or numpy.
 """
 import math
 
-# Routing arms compared by exp1/exp2/exp3: (label, allow_reroute, predictive)
+# Routing arms compared by exp1/exp2/exp3: (label, allow_reroute, predictive, utility)
+# The two predictive arms share the same forward-looking estimate of p and differ
+# only in what they optimise: "ratio" maximises p/hops, "cost" minimises Y(v), so
+# only "cost" keeps the drop penalty and the remaining attempt budget in view.
 MODES = [
-    ("shortest", False, False),
-    ("reactive", True, False),
-    ("predictive", True, True),
+    ("shortest", False, False, "ratio"),   # utility is unused when predictive=False
+    ("reactive", True, False, "ratio"),
+    ("predictive", True, True, "ratio"),
+    ("predictive_cost", True, True, "cost"),
 ]
 
 

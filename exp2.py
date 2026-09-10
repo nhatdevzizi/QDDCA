@@ -8,38 +8,39 @@ from collections import Counter
 from util import MODES
 # import numpy as np
 
-random.seed(2)
 # log.set_debug(True)
-# random.seed(2)
-randomstate = random.getstate()
+# Every point plotted from this CSV is the mean over these paired scenarios.
+SEEDS = (101, 202, 303)
 
 os.makedirs("output", exist_ok=True)
 f = open("output/exp1-4.csv","w", buffering=1)
 
-for w in [10, 20, 30]:
-    for mode, reroute, predictive in MODES:
-        for m in range(1, 11):
-            random.setstate(randomstate)
+# Fixed grid shared by every experiment: n=50, M=10, memorySize=20, reqs=5.
+# Only the attempt budget M is swept here; w stays at the 12 used by the paper.
+for seed in SEEDS:
+    random.seed(seed)
+    randomstate = random.getstate()  # one topology and request set per seed
+    for w in [12]:
+        for mode, reroute, predictive, utility in MODES:
+            for m in range(1, 11):
+                random.setstate(randomstate)
 
-            s = Simulator(0, 10, 1000)
-            log.install(s)
-            net = Network(n=50, p = 0.1, reqs = 1, memorySize=20, windowSize = w, queryTime= 0.5/m, send_max_try= m, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive)
-            # net = Network(n=50, p = 0.1, reqs = 1, memorySize=20, windowSize = w, queryTime= 0.1, send_max_try= m, rate = 1000, delay = 0.1, allow_reroute=reroute)
+                s = Simulator(0, 10, 1000)
+                log.install(s)
+                net = Network(n=50, p = 0.1, reqs = 5, memorySize=10, windowSize = w, queryTime= 0.5/m, send_max_try= m, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive, utility=utility)
 
-            net.install(s)
-            s.run()
+                net.install(s)
+                s.run()
 
-            ans_list = []
-            drop_list = []
-            # print(net.s, net.d)
-            for s in net.s:
-                c = Counter([tuple(x.route) for x in s.sendedList])
-                # print(f"result on {s}->{s.dest}: sended {len(s.sendedList)} drop {len(s.dropList)} sending {len(s.sendingList)}", end=" ")
-                # print(c)
-                ans_list.append(len(s.sendedList))
-                drop_list.append(len(s.dropList))
+                ans_list = []
+                drop_list = []
+                for s in net.s:
+                    # c ends up holding the last request's routes only, as in QDDCA-main.
+                    c = Counter([tuple(x.route) for x in s.sendedList])
+                    ans_list.append(len(s.sendedList))
+                    drop_list.append(len(s.dropList))
 
-            f.write(f"{w},{m},{mode},{sum(ans_list)},{sum(drop_list)},{len(c)},\"{c}\"\n")
+                f.write(f"{seed},{w},{m},{mode},{sum(ans_list)},{sum(drop_list)},{len(c)},\"{c}\"\n")
 
-            print(mode, w, m , sum(ans_list) , sep=",")
+                print(seed, mode, w, m, sum(ans_list), sep=",")
 f.close()

@@ -152,13 +152,13 @@ class SelfTimer(Timer):
             self.l2 = []
 
 
-def run(mode, reroute, predictive, w=10, m=10):
+def run(mode, reroute, predictive, utility, w=12, m=10):
     """Trace n3's memory occupancy per flow for one routing arm."""
     random.setstate(randomstate)  # Same topology and RNG stream for every arm
 
     s = Simulator(0, 30, 1000)
     log.install(s)
-    net = FixTopoNetwork(n=50, p = 0.1, reqs = 1, memorySize=20, windowSize = w, queryTime= 0.5/m, send_max_try= m, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive)
+    net = FixTopoNetwork(n=50, p = 0.1, reqs = 1, memorySize=20, windowSize = w, queryTime= 0.5/m, send_max_try= m, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive, utility=utility)
     t = SelfTimer(net, mode)
 
     net.install(s)
@@ -172,6 +172,6 @@ def run(mode, reroute, predictive, w=10, m=10):
         print(f"{src}, {w},{m},{mode},{len(src.sendedList)},{len(src.dropList)}, \"{c}\"")
 
 
-for mode, reroute, predictive in MODES:
-    run(mode, reroute, predictive)
+for mode, reroute, predictive, utility in MODES:
+    run(mode, reroute, predictive, utility)
 f.close()
