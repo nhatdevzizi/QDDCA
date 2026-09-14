@@ -10,7 +10,7 @@ from util import MODES
 
 # log.set_debug(True)
 # Every point plotted from this CSV is the mean over these paired scenarios.
-SEEDS = (101, 202, 303)
+SEEDS = (range(101, 116))
 
 os.makedirs("output", exist_ok=True)
 f = open("output/exp1-4.csv","w", buffering=1)
@@ -20,7 +20,7 @@ f = open("output/exp1-4.csv","w", buffering=1)
 for seed in SEEDS:
     random.seed(seed)
     randomstate = random.getstate()  # one topology and request set per seed
-    for w in [12]:
+    for w in [30]:
         for mode, reroute, predictive, utility in MODES:
             for m in range(1, 11):
                 random.setstate(randomstate)

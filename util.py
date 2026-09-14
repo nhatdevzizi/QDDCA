@@ -9,8 +9,7 @@ import statistics
 # The two predictive arms share the same forward-looking estimate of p and differ
 # only in what they optimise: "ratio" maximises p/hops, "cost" minimises Y(v), so
 # only "cost" keeps the drop penalty and the remaining attempt budget in view.
-MODES = [
-    ("shortest", False, False, "ratio"),   # utility is unused when predictive=False
+MODES = [   # utility is unused when predictive=False
     ("reactive", True, False, "ratio"),
     ("predictive", True, True, "ratio"),
     ("predictive_cost", True, True, "cost"),

@@ -19,9 +19,9 @@ from util import MODES, coefficient_of_variation
 import numpy as np
 
 # Every point plotted from this CSV is the mean over these paired scenarios.
-SEEDS = (101, 202, 303)
+SEEDS = (range(101, 116))
 
-NODE_COUNTS = (25, 50, 100, 150, 200)
+NODE_COUNTS = (50, 100, 150, 200)
 REQUEST_DENSITY = 10  # reqs = n // REQUEST_DENSITY, i.e. one flow per 10 nodes
 
 os.makedirs("output", exist_ok=True)
@@ -33,13 +33,13 @@ for seed in SEEDS:
     random.seed(seed)
     randomstate = random.getstate()  # one topology and request set per seed
     for n in NODE_COUNTS:
-        reqs = max(2, n // REQUEST_DENSITY)  # CV needs at least two requests
+        reqs = n // REQUEST_DENSITY  # CV needs at least two requests
         for mode, reroute, predictive, utility in MODES:
             random.setstate(randomstate)
 
             s = Simulator(0, 10, 1000)
             log.install(s)
-            net = Network(n=n, p = 0.1, reqs = reqs, memorySize=20, windowSize = 12, queryTime= 0.05, send_max_try= 10, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive, utility=utility)
+            net = Network(n=n, p = 0.1, reqs = reqs, memorySize=10, windowSize = 30, queryTime= 0.05, send_max_try= 10, rate = 1000, delay = 0.001, allow_reroute=reroute, random_memory=False, predictive=predictive, utility=utility)
 
             net.install(s)
             s.run()

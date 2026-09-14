@@ -9,7 +9,7 @@ from util import MODES, coefficient_of_variation
 import numpy as np
 
 # Every point plotted from this CSV is the mean over these paired scenarios.
-SEEDS = (101, 202, 303)
+SEEDS = (range(101, 116))
 
 os.makedirs("output", exist_ok=True)
 f = open("output/exp2-7.1.csv","w", buffering=1)
