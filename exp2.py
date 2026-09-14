@@ -9,11 +9,11 @@ from util import MODES
 # import numpy as np
 
 # log.set_debug(True)
-# Every point plotted from this CSV is the median over these paired scenarios.
-SEEDS = (range(101, 116))
+# Every point plotted from this CSV is the mean over these paired scenarios.
+SEEDS = (101, 202, 303)
 
-os.makedirs("result/15-seed", exist_ok=True)
-f = open("result/15-seed/exp1-4.csv","w", buffering=1)
+os.makedirs("output", exist_ok=True)
+f = open("output/exp1-4.csv","w", buffering=1)
 
 # Fixed grid shared by every experiment: n=50, M=10, memorySize=20, reqs=5.
 # Only the attempt budget M is swept here; w stays at the 12 used by the paper.
