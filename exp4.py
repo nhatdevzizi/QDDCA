@@ -18,14 +18,14 @@ from collections import Counter
 from util import MODES, coefficient_of_variation
 import numpy as np
 
-# Every point plotted from this CSV is the mean over these paired scenarios.
-SEEDS = (101, 202, 303)
+# Every point plotted from this CSV is the median over these paired scenarios.
+SEEDS = (range(101, 116))
 
 NODE_COUNTS = (25, 50, 100, 150, 200)
 REQUEST_DENSITY = 10  # reqs = n // REQUEST_DENSITY, i.e. one flow per 10 nodes
 
-os.makedirs("output", exist_ok=True)
-f = open("output/exp4_scale.csv", "w", buffering=1)
+os.makedirs("result/15-seed", exist_ok=True)
+f = open("result/15-seed/exp4_scale.csv", "w", buffering=1)
 
 # Fixed grid shared by every experiment: M=10, memorySize=20, w=12.
 # Only the node count -- and the request count tied to it -- is swept here.
