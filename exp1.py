@@ -3,25 +3,26 @@ import random
 from qns.simulator.simulator import Simulator
 import qns.utils.log as log
 import os
-import sys
-from collections import Counter
 from util import MODES, coefficient_of_variation
 import numpy as np
+from multiprocessing import Pool, cpu_count
 
 # Every point plotted from this CSV is the mean over these paired scenarios.
-SEEDS = (range(101, 116))
+SEEDS = list(range(101, 116))
 
-os.makedirs("output", exist_ok=True)
-f = open("output/exp2-7.1.csv","w", buffering=1)
+M_VALUES = [10]
+W_RANGE = range(1, 31)
 
-# Fixed grid shared by every experiment: n=50, M=10, memorySize=20, reqs=5.
-# Only the sending window w is swept here.
-for seed in SEEDS:
+
+def run_seed(seed):
+    """Run all (m, mode, w) combinations for one seed; return list of CSV lines."""
+    rows = []
     random.seed(seed)
     randomstate = random.getstate()  # one topology and request set per seed
-    for m in [10]:
+
+    for m in M_VALUES:
         for mode, reroute, predictive, utility in MODES:
-            for w in range(1,31):
+            for w in W_RANGE:
                 random.setstate(randomstate)
 
                 s = Simulator(0, 10, 1000)
@@ -34,12 +35,31 @@ for seed in SEEDS:
                 ans_list = []
                 drop_list = []
                 for s in net.s:
-                    c = Counter([tuple(x.route) for x in s.sendedList])
                     ans_list.append(len(s.sendedList))
                     drop_list.append(len(s.dropList))
 
                 cv = coefficient_of_variation(ans_list)
-                f.write(f"{seed},{w},{m},{mode},{sum(ans_list)},{sum(drop_list)},{np.std(ans_list)},{cv:.4f},{ans_list}\n")
+                rows.append(
+                    f"{seed},{w},{m},{mode},"
+                    f"{sum(ans_list)},{sum(drop_list)},"
+                    f"{np.std(ans_list)},{cv:.4f},{ans_list}\n"
+                )
+                print(f"seed={seed} w={w:2d} mode={mode} ans={sum(ans_list)}", flush=True)
 
-                print(seed, mode, w, m, sum(ans_list), sep=",")
-f.close()
+    return rows
+
+
+if __name__ == "__main__":
+    os.makedirs("result/15-seed", exist_ok=True)
+
+    workers = min(len(SEEDS), cpu_count())
+    print(f"Running {len(SEEDS)} seeds across {workers} parallel workers ...")
+
+    # pool.map preserves seed order: results[i] corresponds to SEEDS[i]
+    with Pool(processes=workers) as pool:
+        results = pool.map(run_seed, SEEDS)
+
+    with open("result/15-seed/exp2-7.1.csv", "w") as f:
+        for seed_rows in results:
+            f.writelines(seed_rows)
+
